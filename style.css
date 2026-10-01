@@ -1,6 +1,5 @@
 /* Anand Mathew, personal academic site.
-   Palette: indigo and turmeric, the two dyes, stand for wet and dry months
-   in the weather strip on the home page and are used nowhere else as decoration. */
+   Palette: deep indigo for links and a turmeric mark for the current page. */
 
 :root {
   --paper: #fafaf8;
@@ -58,6 +57,8 @@ header.site .wrap {
   padding-bottom: 10px;
 }
 
+header.site.home .wrap { justify-content: flex-end; }
+
 .site-name {
   font-family: var(--serif);
   font-size: 19px;
@@ -86,28 +87,28 @@ main { padding: 36px 0 72px; }
 
 .hero {
   display: grid;
-  grid-template-columns: 1fr 132px;
-  gap: 28px;
-  align-items: end;
+  grid-template-columns: 1fr 240px;
+  gap: 36px;
+  align-items: center;
 }
 
 .hero h1 {
-  font-size: clamp(44px, 8vw, 64px);
+  font-size: clamp(42px, 7vw, 58px);
   font-weight: 300;
   line-height: 1.02;
   letter-spacing: -0.01em;
-  margin: 0 0 14px;
+  margin: 0 0 18px;
 }
 
 .hero .lede { font-size: 20px; line-height: 1.55; margin: 0; max-width: 36em; }
 
 .hero img {
-  width: 132px;
-  height: 160px;
+  width: 240px;
+  height: 300px;
   object-fit: cover;
-  object-position: 50% 20%;
+  object-position: 50% 15%;
   display: block;
-  filter: saturate(0.9);
+  border-radius: 3px;
 }
 
 .market {
@@ -116,40 +117,6 @@ main { padding: 36px 0 72px; }
   margin: 18px 0 0;
 }
 .market a { margin-left: 4px; }
-
-/* Weather strip */
-
-figure.strip { margin: 40px 0 8px; }
-
-.strip svg { display: block; width: 100%; height: auto; overflow: visible; }
-
-.strip .bar { transform-box: fill-box; }
-.strip .wet { fill: var(--indigo); transform-origin: 50% 100%; }
-.strip .dry { fill: var(--turmeric); transform-origin: 50% 0%; }
-.strip .base { stroke: var(--ink); stroke-width: 1; }
-.strip .yr { font-family: var(--sans); font-size: 11px; fill: var(--muted); }
-.strip .tick { stroke: var(--muted); stroke-width: 1; }
-.strip .month:hover .bar, .strip .month:focus .bar { opacity: 0.6; }
-.strip .hit { fill: transparent; }
-
-.js .strip .bar { transform: scaleY(0); }
-.js .strip.drawn .bar {
-  transform: scaleY(1);
-  transition: transform 520ms cubic-bezier(0.2, 0.7, 0.2, 1);
-  transition-delay: calc(var(--i) * 14ms);
-}
-
-.strip figcaption {
-  font-family: var(--sans);
-  font-size: 14.5px;
-  line-height: 1.5;
-  color: var(--muted);
-  margin-top: 10px;
-  max-width: 44em;
-}
-.strip figcaption .k-wet { color: var(--indigo); }
-.strip figcaption .k-dry { color: var(--turmeric); }
-.strip .readout { font-variant-numeric: tabular-nums; color: var(--ink); min-height: 1.5em; display: block; }
 
 /* Sections */
 
@@ -229,16 +196,37 @@ footer .wrap {
 @media (max-width: 640px) {
   body { font-size: 17px; }
   main { padding-top: 24px; }
-  .hero { grid-template-columns: 1fr 92px; gap: 16px; }
-  .hero img { width: 92px; height: 112px; }
+  .hero { grid-template-columns: 1fr; gap: 22px; }
+  .hero img { width: 200px; height: 250px; order: -1; }
   .hero .lede { font-size: 18px; }
   .facts { grid-template-columns: 1fr; gap: 0; }
   .facts dd { margin-bottom: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .js .strip .bar { transform: none; }
-  .js .strip.drawn .bar { transition: none; }
   details.abs[open] .abstract { animation: none; }
   details.abs summary::before { transition: none; }
+}
+
+/* Motion: smooth scrolling (Lenis) and a soft cross-fade between pages.
+   The header stays put and the current-page mark slides to the new tab. */
+
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+@view-transition { navigation: auto; }
+
+header.site { view-transition-name: site-header; }
+nav a[aria-current="page"] { view-transition-name: current-tab; }
+
+::view-transition-old(root) { animation: 180ms ease-in both page-out; }
+::view-transition-new(root) { animation: 320ms cubic-bezier(0.2, 0.7, 0.2, 1) 60ms both page-in; }
+::view-transition-group(current-tab) { animation-duration: 320ms; animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1); }
+
+@keyframes page-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes page-in { from { opacity: 0; transform: translateY(10px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
 }

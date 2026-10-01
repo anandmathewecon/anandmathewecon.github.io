@@ -5,11 +5,11 @@ GitHub Pages serves the files as they are.
 
 ## Pages
 
-- `index.html` home: photo, bio, job market line, weather strip, fields, references
+- `index.html` home: photo, bio, job market line, fields, references
 - `research.html` JMP with full abstract, working papers with collapsed abstracts
 - `teaching.html` instructor of record and TA history
 - `cv/Mathew_CV.pdf` the CV, compiled from the Overleaf project `Anand_Mathew_CV`
-- `strip.js` draws the weather strip on the home page, with its data embedded
+- `site.js` smooth scrolling (Lenis, loaded from jsDelivr); page transitions are pure CSS in `style.css`
 
 ## Hosting
 
