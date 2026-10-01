@@ -10,13 +10,11 @@ GitHub Pages serves the files as they are.
 - `teaching.html` instructor of record and TA history
 - `cv/Mathew_CV.pdf` the CV, compiled from the Overleaf project `Anand_Mathew_CV`
 
-## Files still to add
+## Updating the CV
 
-- `cv/Mathew_CV.pdf` (export from Overleaf)
-- `papers/Mathew_Mathur_JMP.pdf` (the current JMP draft)
-
-Both are linked from the pages already, so the links work as soon as the
-files are in place.
+Recompile the Overleaf project `Anand_Mathew_CV`, download the PDF, and
+replace `cv/Mathew_CV.pdf`. The JMP has no PDF link yet. When the draft is
+ready to share, add it under `papers/` and link it from `research.html`.
 
 ## Preview locally
 
