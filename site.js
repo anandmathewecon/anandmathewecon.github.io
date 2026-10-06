@@ -7,7 +7,16 @@
     var dark = root.getAttribute("data-theme") === "dark";
     btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
   }
+  function applySaved() {
+    var saved = null;
+    try { saved = localStorage.getItem("theme"); } catch (e) {}
+    if (saved === "dark") root.setAttribute("data-theme", "dark"); else root.removeAttribute("data-theme");
+    label();
+  }
   label();
+  // Pages restored by the Back button, and other open tabs, pick up the latest choice.
+  window.addEventListener("pageshow", applySaved);
+  window.addEventListener("storage", function (e) { if (e.key === "theme") applySaved(); });
   btn.addEventListener("click", function () {
     var dark = root.getAttribute("data-theme") === "dark";
     if (dark) root.removeAttribute("data-theme"); else root.setAttribute("data-theme", "dark");
