@@ -1,0 +1,1311 @@
+<meta charset="utf-8">
+<title>Every Dataset Has a Shape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F5F7FA; --panel:#EAEFF6; --card:#FFFFFF;
+  --ink:#121A2B; --muted:#65758C; --line:#D6DEE9;
+  --blue:#0021A5; --blue-soft:#5B7BD5; --orange:#FA4616; --orange-dim:#FDE3DA;
+  --grid:#C3CDDC; --neutral:#98A6BB;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1220; --panel:#182135; --card:#141C2E;
+    --ink:#EAF0FA; --muted:#93A3BC; --line:#26314A;
+    --blue:#7C9BFF; --blue-soft:#4E6BC4; --orange:#FF6A3D; --orange-dim:#3A1E16;
+    --grid:#33405C; --neutral:#6B7C99;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1220; --panel:#182135; --card:#141C2E;
+  --ink:#EAF0FA; --muted:#93A3BC; --line:#26314A;
+  --blue:#7C9BFF; --blue-soft:#4E6BC4; --orange:#FF6A3D; --orange-dim:#3A1E16;
+  --grid:#33405C; --neutral:#6B7C99;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--ground); color:var(--ink); overflow:hidden;
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  font-size:clamp(14px,1.15vw,20px); line-height:1.4;
+  display:flex; flex-direction:column; cursor:pointer;
+}
+
+/* ---- scene tabs ---- */
+#tabs{
+  display:flex; gap:.15rem; padding:.5rem 1.2rem .3rem; flex-wrap:wrap;
+  border-bottom:1px solid var(--line); background:var(--ground); cursor:default;
+}
+#tabs button{
+  font:inherit; font-size:.72em; font-family:"IBM Plex Mono",monospace;
+  letter-spacing:.02em; padding:.3em .7em; border-radius:6px;
+  border:1px solid transparent; background:none; color:var(--muted); cursor:pointer;
+}
+#tabs button:hover{background:var(--panel); color:var(--ink);}
+#tabs button[aria-current="true"]{background:var(--ink); color:var(--ground); font-weight:600;}
+#tabs button:focus-visible{outline:2px solid var(--orange); outline-offset:2px;}
+
+/* ---- head ---- */
+header{padding:1.1rem 4vw .3rem;}
+h2{
+  font-family:Fraunces,Georgia,serif; font-weight:600; letter-spacing:-.015em;
+  font-size:clamp(1.35rem,2.3vw,2.15rem); margin:0; line-height:1.1;
+  text-wrap:balance; min-height:1.15em;
+}
+#cap{color:var(--muted); margin:.35em 0 0; max-width:86ch; min-height:1.4em; font-size:.95em;}
+#cap b{color:var(--ink); font-weight:600;}
+
+/* ---- stage: the SVG on the left, the real data table on the right ---- */
+#stage{flex:1; min-height:0; padding:0 2vw .2rem; display:flex; gap:1.1rem; align-items:stretch;}
+#svwrap{flex:0 0 68%; min-width:0; min-height:0;}
+svg{width:100%; height:100%; display:block;}
+#dpanel{
+  flex:1 1 32%; min-width:0; display:flex; flex-direction:column; cursor:default;
+  border:1px solid var(--line); border-radius:10px; background:var(--card); overflow:hidden;
+}
+#dcap{
+  padding:.5em .7em; border-bottom:1px solid var(--line); background:var(--panel);
+  font-size:.68em; color:var(--muted); line-height:1.35;
+}
+#dcap b{color:var(--ink); font-weight:600;}
+#dscroll{flex:1; min-height:0; overflow-y:auto; overflow-x:auto;}
+#dtab{border-collapse:collapse; width:100%; font-size:.7em;}
+#dtab th{
+  position:sticky; top:0; z-index:1; background:var(--panel); color:var(--muted);
+  font-weight:600; text-align:left; padding:.4em .55em; white-space:nowrap;
+  border-bottom:1px solid var(--line);
+}
+#dtab th.n{text-align:right;}
+#dtab td{padding:.24em .55em; border-bottom:1px solid var(--line); white-space:nowrap;}
+#dtab td.n{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; text-align:right;}
+#dtab tbody tr:hover{background:var(--panel);}
+#dtab tbody tr.hl{background:var(--orange-dim);}
+#dtab tbody tr.hl td{color:var(--ink); font-weight:600;}
+#dtab tbody tr.dim{opacity:.28;}
+#dtab tbody tr.tot td{font-weight:700; border-top:2px solid var(--neutral);}
+text{font-family:"IBM Plex Sans",system-ui,sans-serif; fill:var(--ink);}
+text.m{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;}
+.person,.mv,.fade{transition:transform .62s cubic-bezier(.4,0,.2,1), opacity .45s ease, fill .45s ease,
+  r .45s ease, y .55s cubic-bezier(.4,0,.2,1), height .55s cubic-bezier(.4,0,.2,1), x .55s cubic-bezier(.4,0,.2,1), cx .55s cubic-bezier(.4,0,.2,1), cy .55s cubic-bezier(.4,0,.2,1);}
+.hit{cursor:help;}
+
+/* ---- foot ---- */
+footer{
+  display:flex; justify-content:space-between; align-items:center; gap:1rem;
+  padding:.5rem 4vw .8rem; font-family:"IBM Plex Mono",monospace;
+  font-size:.7em; color:var(--muted);
+}
+footer kbd{border:1px solid var(--line); border-radius:4px; padding:0 .35em; margin:0 .1em;
+  background:var(--card); color:var(--ink);}
+#dots{display:flex; gap:.28rem; flex-wrap:wrap; justify-content:center;}
+#dots i{width:7px; height:7px; border-radius:50%; background:var(--line); display:block;}
+#dots i.on{background:var(--orange);}
+#pos b{color:var(--orange); font-weight:600;}
+
+/* ---- interactive controls (per scene) ---- */
+#ctrls{
+  display:none; gap:1.2rem; padding:.2rem 4vw .1rem; flex-wrap:wrap; cursor:default; align-items:center;
+}
+#ctrls.show{display:flex;}
+.ctrl{display:flex; align-items:center; gap:.5rem; opacity:.32; pointer-events:none;
+  transition:opacity .3s;}
+.ctrl.live{opacity:1; pointer-events:auto;}
+.ctrl span.lbl{font-size:.78em; color:var(--muted);}
+.ctrl button, .btn{
+  font:inherit; font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:.8em;
+  min-width:2em; height:2em; padding:0 .6em; border-radius:6px; border:1px solid var(--line);
+  background:var(--card); color:var(--ink); cursor:pointer; line-height:1;
+}
+.ctrl button:hover, .btn:hover{background:var(--panel); border-color:var(--neutral);}
+.ctrl button:focus-visible, .btn:focus-visible{outline:2px solid var(--orange); outline-offset:2px;}
+.ctrl button[aria-pressed="true"], .btn[aria-pressed="true"]{background:var(--ink); color:var(--ground); border-color:var(--ink);}
+.ctrl output{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
+  font-weight:600; min-width:3.4em; text-align:center;}
+.btn.soft{font-weight:500; color:var(--muted);}
+.btn.soft[aria-current="true"]{background:var(--orange); color:#fff; border-color:var(--orange);}
+.btn:disabled{opacity:.35; cursor:default;}
+.sub{display:flex; gap:.3rem; flex-wrap:wrap; align-items:center;}
+.sub .lbl{font-size:.72em; color:var(--muted); font-family:"IBM Plex Mono",monospace; margin-right:.3em;}
+
+/* ---- tooltip ---- */
+#tip{
+  position:fixed; z-index:9; pointer-events:none; opacity:0;
+  transition:opacity .14s; max-width:34ch;
+  background:var(--ink); color:var(--ground);
+  padding:.45em .7em; border-radius:7px; font-size:.78em; line-height:1.35;
+  box-shadow:0 6px 20px rgba(0,0,0,.28);
+}
+#tip.on{opacity:1;}
+#tip b{color:var(--orange);}
+
+@media (prefers-reduced-motion: reduce){
+  .person,.mv,.fade{transition-duration:.01ms;}
+}
+</style>
+
+<nav id="tabs" class="noadv"></nav>
+
+<header>
+<meta charset="utf-8">
+  <h2 id="ttl"></h2>
+  <p id="cap"></p>
+</header>
+
+<div id="ctrls" class="noadv"></div>
+
+<div id="stage">
+  <div id="svwrap"><svg id="sv" viewBox="0 0 1200 620" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <aside id="dpanel" class="noadv">
+    <div id="dcap"></div>
+    <div id="dscroll"><table id="dtab"><thead id="dhead"></thead><tbody id="dbody"></tbody></table></div>
+  </aside>
+</div>
+
+<footer>
+  <span id="pos"></span>
+  <div id="dots"></div>
+  <span><kbd>click</kbd> or <kbd>&rarr;</kbd> next step &nbsp;·&nbsp; <kbd>&larr;</kbd> back &nbsp;·&nbsp; <kbd>1</kbd>–<kbd>5</kbd> jump &nbsp;·&nbsp; <kbd>D</kbd> new seed &nbsp;·&nbsp; <kbd>F</kbd> full screen</span>
+</footer>
+
+<div id="tip"></div>
+
+<script>
+(function(){
+"use strict";
+const NS="http://www.w3.org/2000/svg";
+const sv=document.getElementById("sv"), tipEl=document.getElementById("tip"),
+      ctrlsEl=document.getElementById("ctrls");
+
+/* =====================================================================
+   REAL DATA (embedded from data/*.csv by build/make_js_data.py)
+   ===================================================================== */
+/* Florida 67 counties: [county, coastal, income (ACS per capita), weekly_wage (QCEW 2024)] */
+const FL=[["Alachua", 0, 38869, 1227],
+["Baker", 0, 31580, 858],
+["Bay", 1, 40782, 1027],
+["Bradford", 0, 27434, 940],
+["Brevard", 1, 44108, 1309],
+["Broward", 1, 43052, 1375],
+["Calhoun", 0, 23413, 802],
+["Charlotte", 1, 42592, 1040],
+["Citrus", 1, 36732, 941],
+["Clay", 0, 39563, 1052],
+["Collier", 1, 62079, 1308],
+["Columbia", 0, 29367, 986],
+["DeSoto", 0, 25162, 949],
+["Dixie", 1, 21861, 878],
+["Duval", 1, 40568, 1378],
+["Escambia", 1, 36825, 1159],
+["Flagler", 1, 45065, 967],
+["Franklin", 1, 35524, 844],
+["Gadsden", 0, 24211, 996],
+["Gilchrist", 0, 35223, 901],
+["Glades", 0, 27173, 1079],
+["Gulf", 1, 37156, 983],
+["Hamilton", 0, 18839, 1107],
+["Hardee", 0, 28365, 908],
+["Hendry", 0, 28345, 1059],
+["Hernando", 1, 34458, 971],
+["Highlands", 0, 32993, 922],
+["Hillsborough", 1, 44342, 1447],
+["Holmes", 0, 26071, 805],
+["Indian River", 1, 48370, 1115],
+["Jackson", 0, 24086, 910],
+["Jefferson", 1, 31702, 923],
+["Lafayette", 0, 22543, 909],
+["Lake", 0, 38577, 1021],
+["Lee", 1, 44931, 1184],
+["Leon", 0, 39955, 1191],
+["Levy", 1, 33050, 839],
+["Liberty", 0, 26302, 958],
+["Madison", 0, 23452, 851],
+["Manatee", 1, 46573, 1170],
+["Marion", 0, 33539, 1010],
+["Martin", 1, 53291, 1143],
+["Miami-Dade", 1, 39469, 1492],
+["Monroe", 1, 59543, 1129],
+["Nassau", 1, 47685, 1092],
+["Okaloosa", 1, 44070, 1185],
+["Okeechobee", 0, 28796, 931],
+["Orange", 0, 41160, 1304],
+["Osceola", 0, 32676, 1010],
+["Palm Beach", 1, 52359, 1485],
+["Pasco", 1, 38864, 1075],
+["Pinellas", 1, 48351, 1298],
+["Polk", 0, 33249, 1071],
+["Putnam", 0, 28621, 992],
+["St. Johns", 1, 57346, 1154],
+["St. Lucie", 1, 36552, 1024],
+["Santa Rosa", 1, 42760, 985],
+["Sarasota", 1, 57835, 1253],
+["Seminole", 0, 45458, 1259],
+["Sumter", 0, 49030, 1113],
+["Suwannee", 0, 27246, 916],
+["Taylor", 1, 28746, 903],
+["Union", 0, 23374, 1017],
+["Volusia", 1, 39154, 1041],
+["Wakulla", 1, 34149, 934],
+["Walton", 1, 53406, 1080],
+["Washington", 0, 27434, 876]];
+/* CPS 1976 hourly wage, Wooldridge wage1, n = 526 */
+const CPS=[3.1,3.24,3,6,5.3,8.75,11.25,5,3.6,18.18,6.25,8.13,8.77,5.5,22.2,17.33,7.5,10.63,3.6,4.5,6.88,8.48,6.33,0.53,6,9.56,7.78,12.5,12.5,3.25,13,4.5,9.68,5,4.68,4.27,6.15,3.51,3,6.25,7.81,10,4.5,4,6.38,13.7,1.67,2.93,3.65,2.9,1.63,8.6,5,6,2.5,3.25,3.4,10,21.63,4.38,11.71,12.39,6.25,3.71,7.78,19.98,6.25,10,5.71,2,5.71,13.08,4.91,2.91,3.75,11.9,4,3.1,8.45,7.14,4.5,4.65,2.9,6.67,3.5,3.26,3.25,8,9.85,7.5,5.91,11.76,3,4.81,6.5,4,3.5,13.16,4.25,3.5,5.13,3.75,4.5,7.63,15,6.85,13.33,6.67,2.53,9.8,3.37,24.98,5.4,6.11,4.2,3.75,3.5,3.64,3.8,3,5,4.63,3,3.2,3.91,6.43,5.48,1.5,2.9,5,8.92,5,3.52,2.9,4.5,2.25,5,10,3.75,10,10.95,7.9,4.72,5.84,3.83,3.2,2,4.5,11.55,2.14,2.38,3.75,5.52,6.5,3.1,10,6.63,10,2.31,6.88,2.83,3.13,8,4.5,8.65,2,4.75,6.25,6,15.38,14.58,12.5,5.25,2.17,7.14,6.22,9,10,5.77,4,8.75,6.53,7.6,5,5,21.86,8.64,3.3,4.44,4.55,3.5,6.25,3.85,6.18,2.91,6.25,6.25,9.05,10,11.11,6.88,8.75,10,3.05,3,5.8,4.1,8,6.15,2.7,2.75,3,3,7.36,7.5,3.5,8.1,3.75,3.25,5.83,3.5,3.33,4,3.5,6.25,2.95,5.71,3,22.86,9,8.33,3,5.75,6.76,10,3,3.5,3.25,4,2.92,3.06,3.2,4.75,3,18.16,3.5,4.11,1.96,4.29,3,6.45,5.2,4.5,3.88,3.45,10.91,4.1,3,5.9,18,4,3,3.55,3,8.75,2.9,6.26,3.5,4.6,6,2.89,5.58,4,6,4.5,2.92,4.33,18.89,4.28,4.57,6.25,2.95,8.75,8.5,3.75,3.15,5,6.46,2,4.79,5.78,3.18,4.68,4.1,2.91,6,3.6,3.95,7,3,6.08,8.63,3,3.75,2.9,3,6.25,3.5,3,3.24,8.02,3.33,5.25,6.25,3.5,2.95,3,4.69,3.73,4,4,2.9,3.05,5.05,13.95,18.16,6.25,5.25,4.79,3.35,3,8.43,5.7,11.98,3.5,4.24,7,6,12.22,4.5,3,2.9,15,4,5.25,4,3.3,5.05,3.58,5,4.57,12.5,3.45,4.63,10,2.92,4.51,6.5,7.5,3.54,4.2,3.51,4.5,3.35,2.91,5.25,4.05,3.75,3.4,3,6.29,2.54,4.5,3.13,6.36,4.68,6.8,8.53,4.17,3.75,11.1,3.26,9.13,4.5,3,8.75,4.14,2.87,3.35,6.08,3,4.2,5.6,10,12.5,3.76,3.1,4.29,10.92,7.5,4.05,4.65,5,2.9,8,8.43,2.92,6.25,6.25,5.11,4,4.44,6.88,5.43,3,2.9,6.25,4.34,3.25,7.26,6.35,5.63,8.75,3.2,3,3,12.5,2.88,3.35,6.5,10.38,4.5,10,3.81,8.8,9.42,6.33,4,2.9,20,11.25,3.5,6,14.38,6.36,3.55,3,4.5,6.63,9.3,3,3.25,1.5,5.9,8,2.9,3.29,6.5,4,6,4.08,3.75,3.05,3.5,2.92,4.5,3.35,5.95,8,3,5,5.5,2.65,3,4.5,17.5,8.18,9.09,11.82,3.25,4.5,4.5,3.71,6.5,2.9,5.6,2.23,5,8.33,2.9,6.25,4.55,3.28,2.3,3.3,3.15,12.5,5.15,3.13,7.25,2.9,1.75,2.89,2.9,17.71,6.25,2.6,6.63,3.5,6.5,3,4.38,10,4.95,9,1.43,3.08,9.33,7.5,4.75,5.65,15,2.27,4.67,11.56,3.5];
+
+
+/* ---------- helpers ---------- */
+function E(tag,at,parent){const e=document.createElementNS(NS,tag);
+  for(const k in at){if(k==="text")e.textContent=at[k];else e.setAttribute(k,at[k]);}
+  (parent||sv).appendChild(e);return e;}
+function T(x,y,txt,o){o=o||{};return E("text",{x:x,y:y,text:txt,
+  "text-anchor":o.a||"middle","font-size":o.s||20,"font-weight":o.w||400,
+  fill:o.f||"var(--ink)",class:"fade "+(o.m?"m":""),opacity:o.o==null?1:o.o},o.p);}
+function xf(g,x,y){g.setAttribute("transform","translate("+x+","+y+")");}
+function op(n,v){n.setAttribute("opacity",v);}
+function clear(g){while(g.firstChild)g.removeChild(g.firstChild);}
+function tip(node,html){node.addEventListener("mousemove",e=>{
+    tipEl.innerHTML=html();tipEl.classList.add("on");
+    const r=tipEl.getBoundingClientRect();
+    let x=e.clientX+16,y=e.clientY+16;
+    if(x+r.width>innerWidth-8)x=e.clientX-r.width-16;
+    if(y+r.height>innerHeight-8)y=e.clientY-r.height-16;
+    tipEl.style.left=x+"px";tipEl.style.top=y+"px";});
+  node.addEventListener("mouseleave",()=>tipEl.classList.remove("on"));}
+function hideTip(){tipEl.classList.remove("on");}
+const OR="var(--orange)", BL="var(--blue)", BS="var(--blue-soft)", MU="var(--muted)",
+      GR="var(--grid)", NU="var(--neutral)", INK="var(--ink)", CARD="var(--card)", PAN="var(--panel)";
+
+/* mulberry32, the same PRNG as the Lecture 3 deck. Default seed 4421. */
+function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+/* one standard normal from two uniforms (Box–Muller, cosine branch only) */
+function normal(r){const u1=r(),u2=r();return Math.sqrt(-2*Math.log(1-u1))*Math.cos(2*Math.PI*u2);}
+/* normal CDF, Abramowitz & Stegun 26.2.17 (|error| < 7.5e-8) */
+function Phi(z){const t=1/(1+0.2316419*Math.abs(z)),d=0.3989422804*Math.exp(-z*z/2);
+  const p=d*t*(0.319381530+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
+  return z>0?1-p:p;}
+const pdfN=z=>Math.exp(-z*z/2)/Math.sqrt(2*Math.PI);
+const ease=t=>1-Math.pow(1-t,3);
+
+/* summary statistics with the course convention: sample SD (n−1),
+   skew = mean(z^3), kurt = mean(z^4), normal = 0 and 3 */
+function stats(x){const n=x.length; if(!n)return null;
+  let m=0; for(const v of x)m+=v; m/=n;
+  let s2=0; for(const v of x)s2+=(v-m)*(v-m);
+  const sd=n>1?Math.sqrt(s2/(n-1)):0;
+  let s3=0,s4=0; if(sd>0){for(const v of x){const z=(v-m)/sd;s3+=z*z*z;s4+=z*z*z*z;}}
+  const srt=x.slice().sort((a,b)=>a-b);
+  const med=n%2?srt[(n-1)/2]:(srt[n/2-1]+srt[n/2])/2;
+  return {n:n,mean:m,median:med,sd:sd,skew:sd>0?s3/n:NaN,kurt:sd>0?s4/n:NaN,sorted:srt};}
+/* quantile, R type 7 (the default of quantile() and IQR()) */
+function q7(srt,p){const h=(srt.length-1)*p,lo=Math.floor(h),hi=Math.min(lo+1,srt.length-1);
+  return srt[lo]+(h-lo)*(srt[hi]-srt[lo]);}
+const f2=v=>isFinite(v)?v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
+const f1=v=>isFinite(v)?v.toLocaleString("en-US",{minimumFractionDigits:1,maximumFractionDigits:1}):"—";
+const f0=v=>isFinite(v)?Math.round(v).toLocaleString("en-US"):"—";
+const neg=s=>String(s).replace(/-/g,"−");
+
+/* rAF tween with a cancel token */
+let animTok=0;
+function tween(dur,fn,done){const my=++animTok,t0=performance.now();
+  function f(t){if(my!==animTok)return;const p=Math.min(1,(t-t0)/dur);fn(ease(p));
+    if(p<1)requestAnimationFrame(f);else if(done)done();}
+  requestAnimationFrame(f);}
+function stopAnim(){animTok++;}
+
+/* nice tick step for an axis */
+function niceStep(raw){const p=Math.pow(10,Math.floor(Math.log10(raw)));const r=raw/p;
+  return (r<1.5?1:r<3.5?2:r<7.5?5:10)*p;}
+
+/* ---------- scene registry ---------- */
+const SCENES=[];
+function scene(o){SCENES.push(o);}
+
+/* =====================================================================
+   THE DATA PANEL — a real scrollable HTML table on the right of every scene
+   ===================================================================== */
+const dcapEl=document.getElementById("dcap"), dscroll=document.getElementById("dscroll"),
+      dheadEl=document.getElementById("dhead"), dbodyEl=document.getElementById("dbody");
+let TBL={key:"",rows:[],onHover:null};
+function setTable(spec){
+  if(!spec){dcapEl.textContent="";dheadEl.innerHTML="";dbodyEl.innerHTML="";
+    TBL={key:"",rows:[],onHover:null};return;}
+  TBL.onHover=spec.onHover||null;
+  dcapEl.innerHTML=spec.caption;
+  if(spec.key===TBL.key)return;              /* same data: keep the scroll position */
+  TBL.key=spec.key;
+  dheadEl.innerHTML="<tr>"+spec.cols.map(c=>'<th class="'+(c.n?"n":"")+'">'+c.h+"</th>").join("")+"</tr>";
+  const frag=document.createDocumentFragment(); TBL.rows=[];
+  spec.rows.forEach(r=>{
+    const tr=document.createElement("tr");
+    tr.dataset.g=(r.g==null?"":String(r.g));
+    if(r.cls)tr.className=r.cls;
+    r.c.forEach((v,q)=>{const td=document.createElement("td");
+      if(spec.cols[q]&&spec.cols[q].n)td.className="n"; td.textContent=v; tr.appendChild(td);});
+    tr.addEventListener("mouseenter",()=>{hlRows(tr.dataset.g,false);
+      if(TBL.onHover)TBL.onHover(tr.dataset.g,true);});
+    tr.addEventListener("mouseleave",()=>{hlRows(null,false);
+      if(TBL.onHover)TBL.onHover(tr.dataset.g,false);});
+    frag.appendChild(tr); TBL.rows.push(tr);
+  });
+  dbodyEl.innerHTML=""; dbodyEl.appendChild(frag); dscroll.scrollTop=0;
+}
+function matcher(g){
+  if(typeof g==="function")return g;
+  if(Array.isArray(g)){const s=g.map(String);return v=>s.indexOf(v)>=0;}
+  return v=>v===String(g);}
+function hlRows(g,scroll){
+  const m=(g==null||g==="")?null:matcher(g);
+  let first=null;
+  for(const tr of TBL.rows){const on=m?!!m(tr.dataset.g):false;
+    tr.classList.toggle("hl",on); if(on&&!first)first=tr;}
+  if(scroll&&first)dscroll.scrollTo({top:Math.max(0,first.offsetTop-dscroll.clientHeight/3),behavior:"smooth"});
+}
+function dimRows(fn){for(const tr of TBL.rows)tr.classList.toggle("dim",!!(fn&&fn(tr.dataset.g)));}
+function scrollRow(g){const t=TBL.rows.find(r=>r.dataset.g===String(g));
+  if(t)dscroll.scrollTo({top:Math.max(0,t.offsetTop-dscroll.clientHeight/3),behavior:"smooth"});}
+/* link an SVG node to the table rows carrying group id g */
+function link(node,g){
+  node.style.pointerEvents="auto"; node.style.cursor="help";
+  node.addEventListener("mouseenter",()=>hlRows(g,true));
+  node.addEventListener("mouseleave",()=>hlRows(null,false));
+}
+
+/* =====================================================================
+   A1 · JOINT, MARGINAL, CONDITIONAL — the internship table in 3D, 7 steps
+   ===================================================================== */
+const CNT=[[8,16,16],[30,24,6]], PRB=[[.08,.16,.16],[.30,.24,.06]];
+const RTOT=[40,60], CTOT=[38,40,22], COND=[[.20,.40,.40],[.50,.40,.10]];
+const SAL=[40,60,80], SALL=["$40k","$60k","$80k"];
+/* the 100 hires, one per row of the panel, shuffled once with seed 4421 */
+const HIRES=(()=>{const a=[];
+  for(let i=0;i<2;i++)for(let j=0;j<3;j++)for(let q=0;q<CNT[i][j];q++)a.push(i*3+j);
+  const r=mul(4421);
+  for(let k=a.length-1;k>0;k--){const q=Math.floor(r()*(k+1)),t=a[k];a[k]=a[q];a[q]=t;}
+  return a;})();
+const A1TABLE={
+  key:"hires100",
+  caption:'<b>The 100 hires.</b> One row per analyst — internship, and the salary band they started on. Source: the Jacksonville accounting firm example, Lecture 4.',
+  cols:[{h:"#",n:1},{h:"internship"},{h:"salary",n:1}],
+  rows:HIRES.map((c,k)=>({g:c,c:[k+1,c<3?"yes":"no","$"+SAL[c%3]+"k"]}))
+};
+A1TABLE.onHover=(gid,on)=>{
+  if(si!==0||!built||!built.bars)return;
+  const B=built.bars[+gid]; if(!B)return;
+  [B.top,B.rgt,B.lft].forEach(n=>{n.setAttribute("stroke",on?INK:(B.i?BS:OR));
+    n.setAttribute("stroke-width",on?3:1);});
+};
+/* isometric projection: floor unit (u along internship, v along salary), h in probability */
+const ISO={ox:466,oy:300,sx:106,sy:52,hz:430};
+function P3(u,v,h){return [ISO.ox+(u-v)*ISO.sx, ISO.oy+(u+v)*ISO.sy-h*ISO.hz];}
+function pts(a){return a.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");}
+const PXA=v=>170+(v-34)/(86-34)*860;
+function plank(y,sc,ticks,lo,hi,parent){
+  const grp=E("g",{},parent);
+  E("line",{x1:sc(lo),x2:sc(hi),y1:y,y2:y,stroke:GR,"stroke-width":5,"stroke-linecap":"round"},grp);
+  ticks.forEach(v=>{E("line",{x1:sc(v),x2:sc(v),y1:y-8,y2:y+8,stroke:NU,"stroke-width":2},grp);
+    T(sc(v),y+30,"$"+v+"k",{s:17,f:MU,m:1,p:grp});});
+  return grp;}
+function fulc(y,sc,v0,parent){const g=E("g",{},parent);
+  E("path",{d:"M0,0 L-14,30 L14,30 Z",fill:INK},g);xf(g,sc(v0),y);return g;}
+
+scene({
+  tab:"1 · Joint, marginal, conditional",
+  table(){return A1TABLE;},
+  steps:[
+    {t:"One hundred analysts, six boxes.",
+     c:"Each one lands in exactly one of six boxes: internship or not, crossed with the salary band they started on. The floor is the table; the height will be the probability."},
+    {t:"Joint — one cell, one bar.",
+     c:"<b>Hover any bar.</b> The six heights are 0.08, 0.16, 0.16 across the interns and 0.30, 0.24, 0.06 across the rest. They add to 1."},
+    {t:"Marginal of X — add across the row and salary disappears.",
+     c:"The three bars in each internship row slide together into one. <b>P(X = 1) = 0.08 + 0.16 + 0.16 = 0.40</b>, and P(X = 0) = 0.60."},
+    {t:"Marginal of Y — the same move the other way.",
+     c:"Now the two bars in each salary column merge. <b>P(Y = 80) = 0.16 + 0.06 = 0.22</b>. A marginal is just a row total or a column total."},
+    {t:"Now I tell you one thing: this person did an internship.",
+     c:"Sixty people are gone — the back row fades out, and its rows grey out in the table. Only the forty interns are still in the running."},
+    {t:"Conditional — what is left has to add to 1 on its own.",
+     c:"Divide each surviving cell by 0.40: <b>0.20, 0.40, 0.40</b>. That is P(Y = y | X = 1). Same shape, rescaled."},
+    {t:"The best guess inside each row.",
+     c:"<b>E[Y | X = 1] = 40(0.20) + 60(0.40) + 80(0.40) = 64</b> and <b>E[Y | X = 0] = 52</b>. Each row balances on its own plank."}
+  ],
+  build(){
+    const g={};
+    /* --- floor --- */
+    g.iso=E("g",{});
+    g.floor=E("g",{},g.iso);
+    for(let i=0;i<2;i++)for(let j=0;j<3;j++)
+      E("polygon",{points:pts([P3(i,j,0),P3(i+1,j,0),P3(i+1,j+1,0),P3(i,j+1,0)]),
+        fill:"none",stroke:GR,"stroke-width":1.6},g.floor);
+    E("polygon",{points:pts([P3(0,0,0),P3(2,0,0),P3(2,3,0),P3(0,3,0)]),
+      fill:"none",stroke:NU,"stroke-width":2.2},g.floor);
+    /* floor labels */
+    [0,1].forEach(i=>{const p=P3(i+0.5,3.28,0);
+      T(p[0],p[1],i?"No internship":"Internship",{s:19,w:600,f:i?BL:OR,p:g.floor});
+      const q=P3(i+0.5,3.28,0);
+      T(q[0],q[1]+20,i?"X = 0":"X = 1",{s:15,f:MU,m:1,p:g.floor});});
+    SAL.forEach((v,j)=>{const p=P3(2.22,j+0.5,0);
+      T(p[0],p[1]+4,SALL[j],{s:18,w:600,f:INK,a:"start",p:g.floor});
+      T(p[0],p[1]+22,"Y = "+v,{s:14,f:MU,m:1,a:"start",p:g.floor});});
+    /* vertical probability axis at the back corner */
+    g.vax=E("g",{},g.iso);
+    const a0=P3(0,0,0),a1=P3(0,0,0.62);
+    E("line",{x1:a0[0],x2:a1[0],y1:a0[1],y2:a1[1],stroke:GR,"stroke-width":1.6},g.vax);
+    [0,0.1,0.2,0.3,0.4,0.5,0.6].forEach(v=>{const p=P3(0,0,v);
+      E("line",{x1:p[0]-7,x2:p[0],y1:p[1],y2:p[1],stroke:NU,"stroke-width":1.4},g.vax);
+      T(p[0]-11,p[1]+5,v.toFixed(2),{a:"end",s:14,f:MU,m:1,p:g.vax});});
+    T(a1[0]-11,a1[1]-14,"probability",{a:"end",s:14,f:MU,p:g.vax});
+    /* --- six bars --- */
+    g.bars=[];
+    for(let i=0;i<2;i++)for(let j=0;j<3;j++){
+      const G=E("g",{},g.iso);
+      const B={g:G,i:i,j:j,
+        top:E("polygon",{points:"",fill:i?BS:OR,opacity:.55,stroke:i?BS:OR,"stroke-width":1},G),
+        rgt:E("polygon",{points:"",fill:i?BS:OR,opacity:.8,stroke:i?BS:OR,"stroke-width":1},G),
+        lft:E("polygon",{points:"",fill:i?BS:OR,opacity:1,stroke:i?BS:OR,"stroke-width":1},G)};
+      G.style.cursor="help";
+      G.addEventListener("mouseenter",()=>hlRows(pi===2?[i*3,i*3+1,i*3+2]:pi===3?[j,3+j]:[i*3+j],true));
+      G.addEventListener("mouseleave",()=>hlRows(null,false));
+      tip(G,()=>{
+        if(pi>=5&&i===0)return `Among the <b>40 interns</b>, ${CNT[0][j]} started at ${SALL[j]}.<br>`+
+          `P(Y = ${SAL[j]} | X = 1) = ${CNT[0][j]} ÷ 40 = <b>${COND[0][j].toFixed(2)}</b>`;
+        if(pi===2)return `<b>${RTOT[i]} of the 100 hires</b> did ${i?"<b>no</b> internship":"an internship"}, at any salary.<br>`+
+          `P(X = ${i?0:1}) = <b>${(RTOT[i]/100).toFixed(2)}</b>, the row total.`;
+        if(pi===3)return `<b>${CTOT[j]} of the 100 hires</b> started at ${SALL[j]}, internship or not.<br>`+
+          `P(Y = ${SAL[j]}) = <b>${(CTOT[j]/100).toFixed(2)}</b>, the column total.`;
+        return `<b>${CNT[i][j]} of the 100 hires</b> did ${i?"<b>no</b> internship":"an internship"} <b>and</b> started at ${SALL[j]}.<br>`+
+          `P(X = ${i?0:1}, Y = ${SAL[j]}) = <b>${PRB[i][j].toFixed(2)}</b>`;});
+      g.bars.push(B);
+    }
+    g.lab=g.bars.map(B=>T(0,0,"",{s:19,w:600,f:INK,m:1,o:0,p:g.iso}));
+    /* --- right-hand arithmetic panel --- */
+    g.rp=E("g",{});
+    E("rect",{x:846,y:96,width:336,height:250,rx:10,fill:PAN},g.rp);
+    g.rpH=T(866,130,"",{a:"start",s:20,w:600,f:INK,p:g.rp});
+    g.rpL=[0,1,2,3,4].map(q=>T(866,166+q*32,"",{a:"start",s:18,m:1,f:MU,p:g.rp}));
+    g.rpS=T(866,346,"",{a:"start",s:17,f:MU,p:g.rp});
+    /* --- step 7: the two planks --- */
+    g.pk=E("g",{opacity:0});
+    const Y1=190,Y0=430;
+    g.p1=plank(Y1,PXA,SAL,36,84,g.pk); g.p0=plank(Y0,PXA,SAL,36,84,g.pk);
+    g.w1=SAL.map((v,j)=>E("circle",{cx:PXA(v),cy:Y1-16-COND[0][j]*20,r:10+COND[0][j]*44,fill:OR,opacity:.88},g.pk));
+    g.w1l=SAL.map((v,j)=>T(PXA(v),Y1-11-COND[0][j]*20,COND[0][j].toFixed(2),{s:15,w:600,f:CARD,m:1,p:g.pk}));
+    g.w0=SAL.map((v,j)=>E("circle",{cx:PXA(v),cy:Y0-16-COND[1][j]*20,r:10+COND[1][j]*44,fill:BS,opacity:.88},g.pk));
+    g.w0l=SAL.map((v,j)=>T(PXA(v),Y0-11-COND[1][j]*20,COND[1][j].toFixed(2),{s:15,w:600,f:CARD,m:1,p:g.pk}));
+    fulc(Y1,PXA,64,g.pk); fulc(Y0,PXA,52,g.pk);
+    T(170,Y1-92,"Interns  ·  X = 1  ·  conditional 0.20 / 0.40 / 0.40",{a:"start",s:20,w:600,f:OR,p:g.pk});
+    T(170,Y0-92,"No internship  ·  X = 0  ·  conditional 0.50 / 0.40 / 0.10",{a:"start",s:20,w:600,f:BL,p:g.pk});
+    T(PXA(64),Y1+62,"E[Y | X = 1] = 64",{s:23,w:600,f:OR,m:1,p:g.pk});
+    T(PXA(52),Y0+62,"E[Y | X = 0] = 52",{s:23,w:600,f:BL,m:1,p:g.pk});
+    T(600,Y0+112,"40(0.20) + 60(0.40) + 80(0.40) = 64        40(0.50) + 60(0.40) + 80(0.10) = 52",
+      {s:18,m:1,f:MU,p:g.pk});
+    /* current geometry, tweened between steps */
+    g.cur=g.bars.map(B=>({u0:B.i,u1:B.i+1,v0:B.j,v1:B.j+1,h:0,o:1,c:B.i?BS:OR}));
+    return g;
+  },
+  target(i){
+    return this.__t(i);
+  },
+  __t(i){
+    const out=[];
+    for(let k=0;k<6;k++){const i0=Math.floor(k/3),j=k%3;
+      const col=i0?BS:OR;
+      if(i<=0)out.push({u0:i0,u1:i0+1,v0:j,v1:j+1,h:0,o:1,c:col});
+      else if(i===1)out.push({u0:i0,u1:i0+1,v0:j,v1:j+1,h:PRB[i0][j],o:1,c:col});
+      else if(i===2)out.push({u0:i0,u1:i0+1,v0:0,v1:3,h:RTOT[i0]/100,o:1,c:col});
+      else if(i===3)out.push({u0:0,u1:2,v0:j,v1:j+1,h:CTOT[j]/100,o:1,c:NU});
+      else if(i===4)out.push({u0:i0,u1:i0+1,v0:j,v1:j+1,h:PRB[i0][j],o:i0?0.10:1,c:col});
+      else out.push({u0:i0,u1:i0+1,v0:j,v1:j+1,h:i0?0:COND[0][j],o:i0?0.10:1,c:col});}
+    return out;
+  },
+  render(g,i){
+    stopAnim();
+    const planks=(i===6);
+    op(g.iso,planks?0:1); op(g.rp,planks?0:1); op(g.pk,planks?1:0);
+    dimRows(planks?null:(i>=4?(gg=>+gg>=3):null));
+    /* right panel copy */
+    const H=["","Joint","Marginal of X","Marginal of Y","Conditioning","Conditional","Row averages"][i];
+    g.rpH.textContent=H;
+    const L=[
+      ["100 hires","6 boxes","heights are 0","all still in play",""],
+      ["interns   0.08  0.16  0.16","others    0.30  0.24  0.06","","the six add to 1.00",""],
+      ["0.08 + 0.16 + 0.16 = 0.40","0.30 + 0.24 + 0.06 = 0.60","","P(X = 1) = 0.40","P(X = 0) = 0.60"],
+      ["0.08 + 0.30 = 0.38","0.16 + 0.24 = 0.40","0.16 + 0.06 = 0.22","","P(Y = 80) = 0.22"],
+      ["kept    40 interns","gone    60 others","","the kept row adds to 0.40,","not to 1"],
+      ["0.08 ÷ 0.40 = 0.20","0.16 ÷ 0.40 = 0.40","0.16 ÷ 0.40 = 0.40","","0.20 + 0.40 + 0.40 = 1.00"],
+      ["","","","",""]][i];
+    g.rpL.forEach((n,q)=>{n.textContent=L[q];
+      n.setAttribute("fill",(i===5&&q===4)||(i===2&&q>=3)||(i===3&&q===4)?OR:MU);});
+    g.rpS.textContent=i===1?"hover a bar, or a row in the table":"";
+    if(planks){this.paint(g,this.__t(5));return;}
+    const from=g.cur.map(s=>Object.assign({},s)), to=this.__t(i);
+    tween(680,p=>{
+      g.cur=from.map((a,k)=>{const b=to[k];return{
+        u0:a.u0+(b.u0-a.u0)*p,u1:a.u1+(b.u1-a.u1)*p,
+        v0:a.v0+(b.v0-a.v0)*p,v1:a.v1+(b.v1-a.v1)*p,
+        h:a.h+(b.h-a.h)*p,o:a.o+(b.o-a.o)*p,c:p<0.5?a.c:b.c};});
+      this.paint(g,g.cur);});
+  },
+  paint(g,st){
+    /* painter's algorithm: draw the far bars first */
+    const order=g.bars.map((B,k)=>k).sort((a,b)=>(st[a].u0+st[a].v0)-(st[b].u0+st[b].v0));
+    order.forEach(k=>{const B=g.bars[k],s=st[k];
+      const h=Math.max(0,s.h),col=s.c||(B.i?BS:OR);
+      [B.top,B.rgt,B.lft].forEach(n=>{n.setAttribute("fill",col);
+        if(n.getAttribute("stroke-width")!=="3")n.setAttribute("stroke",col);});
+      B.top.setAttribute("points",pts([P3(s.u0,s.v0,h),P3(s.u1,s.v0,h),P3(s.u1,s.v1,h),P3(s.u0,s.v1,h)]));
+      B.lft.setAttribute("points",pts([P3(s.u0,s.v1,h),P3(s.u1,s.v1,h),P3(s.u1,s.v1,0),P3(s.u0,s.v1,0)]));
+      B.rgt.setAttribute("points",pts([P3(s.u1,s.v0,h),P3(s.u1,s.v1,h),P3(s.u1,s.v1,0),P3(s.u1,s.v0,0)]));
+      op(B.g,s.o*(h>0.0015?1:0));
+      B.g.style.pointerEvents=(s.o>0.5&&h>0.0015)?"auto":"none";
+      g.iso.appendChild(B.g);
+      /* value label on the top face */
+      const c=P3((s.u0+s.u1)/2,(s.v0+s.v1)/2,h),L=g.lab[k];
+      L.setAttribute("x",c[0]); L.setAttribute("y",c[1]+6);
+      L.textContent=h>0.0015?h.toFixed(2):"";
+      op(L,h>0.0015?s.o:0);
+      g.iso.appendChild(L);});
+  }
+});
+
+/* =====================================================================
+   A2 · BERKELEY, IN SIX CLICKS — 6 steps
+   ===================================================================== */
+/* dept, men applied, men admitted, women applied, women admitted (Bickel, Hammel & O'Connell 1975) */
+const BERK=[["A",825,512,108,89],["B",560,353,25,17],["C",325,120,593,202],
+            ["D",417,138,375,131],["E",191,53,393,94],["F",373,22,341,24]];
+const BM_APP=2691,BM_ADM=1198,BW_APP=1835,BW_ADM=557;
+const BERKTABLE={
+  key:"berkeley6",
+  caption:'<b>Berkeley graduate admissions, autumn 1973.</b> The six largest departments. Source: Bickel, Hammel &amp; O’Connell, <i>Science</i> 187 (1975).',
+  cols:[{h:"dept"},{h:"M app",n:1},{h:"M adm",n:1},{h:"M %",n:1},{h:"W app",n:1},{h:"W adm",n:1},{h:"W %",n:1}],
+  rows:BERK.map(d=>({g:d[0],c:[d[0],d[1],d[2],(100*d[2]/d[1]).toFixed(0)+"%",d[3],d[4],(100*d[4]/d[3]).toFixed(0)+"%"]}))
+    .concat([{g:"tot",cls:"tot",c:["all six",BM_APP,BM_ADM,"44.5%",BW_APP,BW_ADM,"30.4%"]}])
+};
+BERKTABLE.onHover=(gid,on)=>{if(si!==1||!built||!built.hi)return;built.hi(gid,on);};
+
+scene({
+  tab:"2 · Berkeley in six clicks",
+  table(){return BERKTABLE;},
+  steps:[
+    {t:"Berkeley, 1973. A nine-point gap, and a lawsuit.",
+     c:"2,691 men applied and <b>44%</b> were admitted. 1,835 women applied and <b>30%</b> were admitted. The university was accused of discriminating against women."},
+    {t:"Each headline number is six departments squashed into one.",
+     c:"The same two bars, cut into the six departments that made them. Each slice is that department's admitted students as a share of <b>all</b> applicants of that sex."},
+    {t:"The two groups did not apply to the same places.",
+     c:"Where each group applied, as a share of its own applicants, with the departments ordered from easiest to hardest to get into. <b>Women applied where almost everyone is rejected.</b>"},
+    {t:"Compare inside a department, not across the university.",
+     c:"Department A admitted <b>62%</b> of the men who applied and <b>82%</b> of the women. That is the comparison you actually want."},
+    {t:"In four of the six, women were admitted at an equal or higher rate.",
+     c:"A, B, D and F. In C and E the men's rate is higher by three or four points. Nothing here looks like a nine-point gap against women."},
+    {t:"Did the rows move, or did the weights?",
+     c:"The rows say no gap. The <b>weights</b> — where each group applied — made the headline. Ask that question of every average of averages you ever see."}
+  ],
+  build(){
+    const g={},BASE=540,HMAX=330;
+    const rate=(a,b)=>100*b/a;
+    const COLM=BL,COLW=OR;
+    const segCol=q=>["#9AA7C4","#7C8CB0","#5E6F9C","#485A88","#354674","#243360"][q];
+    /* --- headline bars --- */
+    g.head=E("g",{});
+    g.hbar=[];
+    [[240,BM_ADM/BM_APP*100,"men",COLM,BM_APP,BM_ADM],[520,BW_ADM/BW_APP*100,"women",COLW,BW_APP,BW_ADM]].forEach((d,q)=>{
+      const w=170,x=d[0],h=d[1]/100*HMAX;
+      const r=E("rect",{x:x,y:BASE-h,width:w,height:h,fill:d[3],opacity:.9,rx:3},g.head);
+      T(x+w/2,BASE-h-18,(q?"30":"44")+"%",{s:38,w:700,f:d[3],m:1,p:g.head});
+      T(x+w/2,BASE+30,d[2],{s:22,w:600,f:d[3],p:g.head});
+      T(x+w/2,BASE+54,f0(d[4])+" applied  ·  "+f0(d[5])+" admitted",{s:15,f:MU,m:1,p:g.head});
+      g.hbar.push(r);});
+    E("line",{x1:180,x2:760,y1:BASE,y2:BASE,stroke:GR,"stroke-width":2},g.head);
+    /* --- step 2: the six slices inside each headline bar --- */
+    g.seg=E("g",{opacity:0});
+    g.segR=[];
+    [[240,BM_APP,1,2],[520,BW_APP,3,4]].forEach(d=>{
+      let acc=0;
+      BERK.forEach((row,q)=>{
+        const share=100*row[d[3]]/d[1],h=share/100*HMAX,y=BASE-acc-h;acc+=h;
+        const r=E("rect",{x:d[0],y:y,width:170,height:h,fill:segCol(q),opacity:.95,
+          stroke:"var(--card)","stroke-width":1.5},g.seg);
+        r.dataset.dept=row[0]; g.segR.push(r);
+        r.style.cursor="help";
+        r.addEventListener("mouseenter",()=>hlRows(row[0],true));
+        r.addEventListener("mouseleave",()=>hlRows(null,false));
+        tip(r,()=>`Department <b>${row[0]}</b>: ${row[d[3]]} admitted out of ${f0(d[1])} applicants of this group = ${share.toFixed(1)} percentage points of the headline.`);
+        if(h>12)T(d[0]+85,y+h/2+5,row[0]+"  "+share.toFixed(1),{s:14,w:600,f:"#fff",m:1,p:g.seg});});
+    });
+    /* --- step 3: application-share strips --- */
+    g.strip=E("g",{opacity:0});
+    const SX0=110,SX1=1080;
+    [["men",BM_APP,1,210,COLM],["women",BW_APP,3,340,COLW]].forEach(d=>{
+      T(SX0,d[3]-14,d[0]+"  ·  where they applied",{a:"start",s:19,w:600,f:d[4],p:g.strip});
+      let x=SX0;
+      BERK.forEach((row,q)=>{
+        const share=row[d[2]]/d[1],w=share*(SX1-SX0);
+        const r=E("rect",{x:x,y:d[3],width:Math.max(0,w-2),height:74,fill:segCol(q),opacity:.95,rx:3},g.strip);
+        r.style.cursor="help";
+        r.addEventListener("mouseenter",()=>hlRows(row[0],true));
+        r.addEventListener("mouseleave",()=>hlRows(null,false));
+        tip(r,()=>`<b>${d[0]}</b>: ${row[d[2]]} of the ${f0(d[1])} applicants applied to department <b>${row[0]}</b> = ${Math.round(share*100)}%.<br>Department ${row[0]} admits ${(100*(row[2]+row[4])/(row[1]+row[3])).toFixed(0)}% of everyone who applies.`);
+        if(w>34){T(x+w/2,d[3]+34,row[0],{s:19,w:700,f:"#fff",p:g.strip});
+          T(x+w/2,d[3]+56,Math.round(share*100)+"%",{s:15,f:"#fff",m:1,p:g.strip});}
+        x+=w;});
+    });
+    E("line",{x1:SX0,x2:SX1,y1:452,y2:452,stroke:NU,"stroke-width":2},g.strip);
+    BERK.forEach((row,q)=>{
+      const ov=100*(row[2]+row[4])/(row[1]+row[3]);
+      const w=(SX1-SX0)/6,x=SX0+q*w;
+      T(x+w/2,474,row[0]+"  "+ov.toFixed(0)+"% admitted",{s:15,f:MU,m:1,p:g.strip});});
+    T(SX0,506,"easiest to get into",{a:"start",s:16,f:MU,p:g.strip});
+    T(SX1,506,"hardest",{a:"end",s:16,w:600,f:OR,p:g.strip});
+    E("line",{x1:SX0+150,x2:SX1-70,y1:500,y2:500,stroke:GR,"stroke-width":2},g.strip);
+    /* --- steps 4 and 5: paired bars, one pair per department --- */
+    g.pair=E("g",{opacity:0});
+    g.pairG=[];
+    const PW=150,PX0=110;
+    BERK.forEach((row,q)=>{
+      const G=E("g",{},g.pair),x=PX0+q*168;
+      const rm=rate(row[1],row[2]),rw=rate(row[3],row[4]);
+      const hm=rm/100*300,hw=rw/100*300;
+      const bm=E("rect",{x:x,y:BASE-hm,width:64,height:hm,fill:COLM,opacity:.9,rx:3},G);
+      const bw=E("rect",{x:x+72,y:BASE-hw,width:64,height:hw,fill:COLW,opacity:.9,rx:3},G);
+      const tm=T(x+32,BASE-hm-10,rm.toFixed(0)+"%",{s:19,w:600,f:COLM,m:1,p:G});
+      const tw=T(x+104,BASE-hw-10,rw.toFixed(0)+"%",{s:19,w:600,f:COLW,m:1,p:G});
+      T(x+68,BASE+30,"dept "+row[0],{s:18,w:600,p:G});
+      T(x+68,BASE+52,f0(row[1])+" m  ·  "+f0(row[3])+" w",{s:14,f:MU,m:1,p:G});
+      const mark=T(x+104,BASE-hw-34,"▲",{s:20,w:700,f:OR,o:0,p:G});
+      G.style.cursor="help";
+      G.addEventListener("mouseenter",()=>hlRows(row[0],true));
+      G.addEventListener("mouseleave",()=>hlRows(null,false));
+      tip(G,()=>`Department <b>${row[0]}</b><br>men ${row[2]} of ${row[1]} = ${rm.toFixed(0)}%<br>women ${row[4]} of ${row[3]} = ${rw.toFixed(0)}%`);
+      g.pairG.push({G:G,bm:bm,bw:bw,tm:tm,tw:tw,mark:mark,up:rw>=rm});
+    });
+    E("line",{x1:90,x2:1120,y1:BASE,y2:BASE,stroke:GR,"stroke-width":2},g.pair);
+    g.brk=E("g",{opacity:0},g.pair);
+    const bx=PX0+16,by=150;
+    E("path",{d:"M"+(PX0)+","+by+" L"+(PX0)+","+(by-16)+" L"+(PX0+136)+","+(by-16)+" L"+(PX0+136)+","+by,
+      fill:"none",stroke:INK,"stroke-width":2.5},g.brk);
+    T(PX0+68,by-26,"62%  vs  82%",{s:24,w:700,f:INK,m:1,p:g.brk});
+    T(PX0+68,by-50,"compare inside the rows",{s:17,f:OR,w:600,p:g.brk});
+    /* --- step 6: weights --- */
+    g.wt=E("g",{opacity:0});
+    T(870,150,"the weights",{a:"start",s:22,w:600,f:INK,p:g.wt});
+    T(870,176,"share of each group's applicants",{a:"start",s:14,f:MU,p:g.wt});
+    BERK.forEach((row,q)=>{
+      const y=212+q*34;
+      T(870,y,"dept "+row[0],{a:"start",s:17,f:MU,p:g.wt});
+      T(1010,y,Math.round(100*row[1]/BM_APP)+"%",{a:"end",s:19,w:600,f:COLM,m:1,p:g.wt});
+      T(1110,y,Math.round(100*row[3]/BW_APP)+"%",{a:"end",s:19,w:600,f:COLW,m:1,p:g.wt});});
+    T(1010,190,"men",{a:"end",s:15,w:600,f:COLM,p:g.wt});
+    T(1110,190,"women",{a:"end",s:15,w:600,f:COLW,p:g.wt});
+    T(870,438,"the rows did not move.",{a:"start",s:19,w:600,f:INK,p:g.wt});
+    T(870,464,"the weights did.",{a:"start",s:19,w:600,f:OR,p:g.wt});
+    g.hi=(dept,on)=>{
+      g.segR.forEach(r=>r.setAttribute("opacity",on?(r.dataset.dept===dept?1:.25):.95));
+      g.pairG.forEach((P,q)=>{const m=BERK[q][0]===dept;
+        P.G.setAttribute("opacity",on?(m?1:.3):1);});
+    };
+    return g;
+  },
+  render(g,i){
+    op(g.head,(i===0||i===1||i===5)?1:0);
+    op(g.seg,i===1?1:0);
+    op(g.strip,i===2?1:0);
+    op(g.pair,(i===3||i===4)?1:0);
+    op(g.brk,i===3?1:0);
+    op(g.wt,i===5?1:0);
+    g.hbar.forEach(r=>r.setAttribute("opacity",i===1?0:.9));
+    g.pairG.forEach((P,q)=>{
+      P.G.setAttribute("opacity",i===3?(q===0?1:.16):1);
+      op(P.mark,(i===4&&P.up)?1:0);});
+    dimRows(null);
+  }
+});
+
+/* =====================================================================
+   A3 · DESCRIBING A DISTRIBUTION — the four knobs, 6 steps
+   ===================================================================== */
+const FLINC=FL.map(d=>d[2]), FLS=stats(FLINC);
+const FLBINS=[1,7,13,9,13,10,7,3,3,1], FLB0=15000, FLBW=5000;
+const A3MODE={
+  gen:{C:50,S:12,lo:0,hi:100,dc:5,ds:3,cmin:25,cmax:75,smin:5,smax:24,
+       tick:10,fmt:v=>f0(v),unit:""},
+  fl:{C:37096,S:10200,lo:8000,hi:70000,dc:2000,ds:1200,cmin:22000,cmax:54000,smin:4000,smax:18000,
+       tick:10000,fmt:v=>"$"+f0(v),unit:""}
+};
+const A3={mode:"gen",C:50,S:12,eps:0,delta:1,overlay:false}
+A3._from={C:A3.C,S:A3.S,eps:A3.eps,delta:A3.delta,mode:A3.mode};;
+/* sinh-arcsinh density of Jones & Pewsey, on a fixed grid, normalised,
+   with every displayed moment integrated on that same grid */
+const SAS_N=800, SAS_LO=-16, SAS_HI=16, SAS_DY=(SAS_HI-SAS_LO)/SAS_N;
+const SAS_Y=(()=>{const a=[];for(let k=0;k<=SAS_N;k++)a.push(SAS_LO+SAS_DY*k);return a;})();
+function sasShape(eps,delta){
+  const f=new Array(SAS_N+1);
+  for(let k=0;k<=SAS_N;k++){const y=SAS_Y[k],s=delta*Math.asinh(y)-eps;
+    f[k]=pdfN(Math.sinh(s))*delta*Math.cosh(s)/Math.sqrt(1+y*y);}
+  let tot=0;for(let k=0;k<=SAS_N;k++)tot+=f[k];tot*=SAS_DY;
+  for(let k=0;k<=SAS_N;k++)f[k]/=tot;
+  let m=0;for(let k=0;k<=SAS_N;k++)m+=SAS_Y[k]*f[k];m*=SAS_DY;
+  let v2=0;for(let k=0;k<=SAS_N;k++){const d=SAS_Y[k]-m;v2+=d*d*f[k];}v2*=SAS_DY;
+  const sd=Math.sqrt(v2);
+  let s3=0,s4=0;for(let k=0;k<=SAS_N;k++){const z=(SAS_Y[k]-m)/sd;s3+=z*z*z*f[k];s4+=z*z*z*z*f[k];}
+  s3*=SAS_DY;s4*=SAS_DY;
+  let cum=0,med=m;
+  for(let k=0;k<=SAS_N;k++){const c0=cum;cum+=f[k]*SAS_DY;
+    if(c0<0.5&&cum>=0.5){med=SAS_Y[k]-SAS_DY*(cum-0.5)/(f[k]*SAS_DY||1);break;}}
+  return {f:f,m:m,sd:sd,skew:s3,kurt:s4,med:med};
+}
+const A3TABLE={
+  key:"fl67",
+  caption:'<b>Florida, 67 counties.</b> Per capita income, ACS 2019–2023 five-year estimates; <span style="font-family:IBM Plex Mono,monospace">z</span> = (income − 37,096) / 10,200.',
+  cols:[{h:"county"},{h:"income",n:1},{h:"z",n:1}],
+  rows:FL.map((d,k)=>({g:d[0],c:[d[0],"$"+f0(d[2]),neg(f2((d[2]-37096)/10200))]}))
+};
+
+scene({
+  tab:"3 · Four knobs",
+  table(){return A3TABLE;},
+  steps:[
+    {t:"One curve. Four numbers describe it.",
+     c:"Start at the normal: <b>skewness 0, kurtosis 3</b>. Every readout below is integrated from the curve you are looking at, so they always agree."},
+    {t:"Knob 1 — center. Where is it?",
+     c:"The <b>center</b> buttons are live. The mean is the balance point; the median is the middle. Right now they sit on top of each other."},
+    {t:"Knob 2 — spread. How spread out is it?",
+     c:"<b>Spread</b> is live too. Same shape, wider or narrower. The bracket under the curve is one SD either side of the mean."},
+    {t:"Knob 3 — skewness. Which tail is longer?",
+     c:"Push <b>skewness</b> up and the right tail stretches. Watch the mean pull away from the median: <b>mean above median means a right tail</b>."},
+    {t:"Knob 4 — kurtosis. How often does something extreme happen?",
+     c:"<b>Kurtosis</b> changes the tails without changing the center or the spread. The normal is exactly <b>3</b>. Above 3, the shaded tails get fatter."},
+    {t:"All four at once, and the real thing.",
+     c:"Press <b>show Florida income</b>: the 67-county histogram appears behind the curve and the four knobs snap to the real values — mean 37,096, SD 10,200, skew <b>0.41</b>, kurt <b>2.45</b>."}
+  ],
+  ctrls:`<div class="ctrl" id="k1"><span class="lbl">center</span><button data-act="c-">−</button><output id="oc">50</output><button data-act="c+">+</button></div>
+    <div class="ctrl" id="k2"><span class="lbl">spread</span><button data-act="s-">−</button><output id="os">12</output><button data-act="s+">+</button></div>
+    <div class="ctrl" id="k3"><span class="lbl">skewness</span><button data-act="k-">−</button><output id="ok">0.00</output><button data-act="k+">+</button></div>
+    <div class="ctrl" id="k4"><span class="lbl">kurtosis</span><button data-act="u-">−</button><output id="ou">3.00</output><button data-act="u+">+</button></div>
+    <div class="ctrl" id="k5"><button class="btn soft" data-act="fl">show Florida income</button><button class="btn soft" data-act="reset">reset</button></div>`,
+  act(a){
+    const M=A3MODE[A3.mode];
+    /* Start from the last SETTLED target, not from a value that is still
+       easing, so clicking twice quickly applies both changes. */
+    if(A3._from&&A3._from.mode===A3.mode){
+      A3.C=A3._from.C;A3.S=A3._from.S;A3.eps=A3._from.eps;A3.delta=A3._from.delta;}
+    if(a==="c+")A3.C=Math.min(M.cmax,A3.C+M.dc);
+    if(a==="c-")A3.C=Math.max(M.cmin,A3.C-M.dc);
+    if(a==="s+")A3.S=Math.min(M.smax,A3.S+M.ds);
+    if(a==="s-")A3.S=Math.max(M.smin,A3.S-M.ds);
+    if(a==="k+")A3.eps=Math.min(2.0,+(A3.eps+0.12).toFixed(3));
+    if(a==="k-")A3.eps=Math.max(-2.0,+(A3.eps-0.12).toFixed(3));
+    if(a==="u+")A3.delta=Math.max(0.62,+(A3.delta-0.08).toFixed(3));   /* smaller delta = fatter tails */
+    if(a==="u-")A3.delta=Math.min(2.60,+(A3.delta+0.08).toFixed(3));
+    if(a==="fl"){
+      if(A3.mode==="fl"){A3.mode="gen";A3.overlay=false;A3.C=50;A3.S=12;A3.eps=0;A3.delta=1;}
+      else{A3.mode="fl";A3.overlay=true;A3.C=37096;A3.S=10200;A3.eps=1.7939371;A3.delta=2.2589187;}
+    }
+    if(a==="reset"){const D=A3MODE[A3.mode];A3.C=D.C;A3.S=D.S;
+      A3.eps=A3.mode==="fl"?1.7939371:0;A3.delta=A3.mode==="fl"?2.2589187:1;}
+    /* Ease from the old settings to the new ones instead of jumping.
+       A mode switch (Florida <-> generic) rescales the axis, so that one snaps. */
+    const to={C:A3.C,S:A3.S,eps:A3.eps,delta:A3.delta};
+    if(a==="fl"||A3._from.mode!==A3.mode){
+      A3._from={C:to.C,S:to.S,eps:to.eps,delta:to.delta,mode:A3.mode};
+      this.paint(built,pi); return;
+    }
+    const fr=A3._from;
+    A3._from={C:to.C,S:to.S,eps:to.eps,delta:to.delta,mode:A3.mode};
+    A3.C=fr.C;A3.S=fr.S;A3.eps=fr.eps;A3.delta=fr.delta;
+    tween(280,p=>{
+      A3.C=fr.C+(to.C-fr.C)*p; A3.S=fr.S+(to.S-fr.S)*p;
+      A3.eps=fr.eps+(to.eps-fr.eps)*p; A3.delta=fr.delta+(to.delta-fr.delta)*p;
+      this.paint(built,pi);
+    },()=>{A3.C=to.C;A3.S=to.S;A3.eps=to.eps;A3.delta=to.delta;this.paint(built,pi);});
+    /* backstop: requestAnimationFrame does not fire in a background tab, so
+       guarantee the final state even if the tween never gets to run. */
+    clearTimeout(A3._t);
+    A3._t=setTimeout(()=>{A3.C=to.C;A3.S=to.S;A3.eps=to.eps;A3.delta=to.delta;this.paint(built,pi);},340);
+  },
+  build(){
+    const g={},X0=110,X1=820,BASE=488,HT=330;
+    g.X0=X0;g.X1=X1;g.BASE=BASE;g.HT=HT;
+    g.hist=E("g",{opacity:0});
+    g.hbars=FLBINS.map(()=>E("rect",{x:0,y:BASE,width:0,height:0,fill:BS,opacity:.35},g.hist));
+    g.tail=E("path",{d:"",fill:OR,opacity:0});
+    g.curve=E("path",{d:"",fill:"none",stroke:INK,"stroke-width":3.5,"stroke-linejoin":"round"});
+    E("line",{x1:X0-20,x2:X1+20,y1:BASE,y2:BASE,stroke:GR,"stroke-width":2});
+    g.ticks=E("g",{});
+    g.meanL=E("line",{x1:0,x2:0,y1:BASE-HT-16,y2:BASE,stroke:OR,"stroke-width":2.5});
+    g.medL=E("line",{x1:0,x2:0,y1:BASE-HT-16,y2:BASE,stroke:INK,"stroke-width":2,"stroke-dasharray":"6 5"});
+    g.meanT=T(0,BASE-HT-24,"mean",{s:16,w:600,f:OR,m:1});
+    g.medT=T(0,BASE-HT-46,"median",{s:16,w:600,f:INK,m:1});
+    g.sdG=E("g",{opacity:0});
+    g.sdLine=E("line",{x1:0,x2:0,y1:BASE+52,y2:BASE+52,stroke:BS,"stroke-width":2.5},g.sdG);
+    g.sdL=E("line",{x1:0,x2:0,y1:BASE+44,y2:BASE+60,stroke:BS,"stroke-width":2.5},g.sdG);
+    g.sdR=E("line",{x1:0,x2:0,y1:BASE+44,y2:BASE+60,stroke:BS,"stroke-width":2.5},g.sdG);
+    g.sdT=T(0,BASE+78,"",{s:16,w:600,f:BS,m:1,p:g.sdG});
+    /* readouts */
+    E("rect",{x:862,y:96,width:320,height:300,rx:10,fill:PAN});
+    T(882,128,"read off the curve",{a:"start",s:19,w:600});
+    g.ro={};
+    ["mean","median","SD","skewness","kurtosis"].forEach((k,q)=>{
+      T(882,172+q*44,k,{a:"start",s:18,f:MU,p:null});
+      g.ro[k]=T(1162,172+q*44,"—",{a:"end",s:22,w:600,m:1});});
+    g.refSk=T(1162,192,"normal 0",{a:"end",s:13,f:MU,m:1});
+    g.refKu=T(1162,236,"normal 3",{a:"end",s:13,f:MU,m:1});
+    g.note=T(882,432,"",{a:"start",s:16,f:OR,w:600});
+    g.note2=T(882,456,"",{a:"start",s:15,f:MU});
+    return g;
+  },
+  render(g,i){
+    ["k1","k2","k3","k4","k5"].forEach((id,q)=>{const d=document.getElementById(id);
+      if(d)d.classList.toggle("live",i>=q+1);});
+    this.paint(g,i);
+  },
+  paint(g,i){
+    const M=A3MODE[A3.mode],X0=g.X0,X1=g.X1,BASE=g.BASE,HT=g.HT;
+    const sh=sasShape(A3.eps,A3.delta);
+    const lo=M.lo,hi=M.hi,X=v=>X0+(v-lo)/(hi-lo)*(X1-X0);
+    /* map the standard shape onto (center, spread) */
+    const toX=y=>A3.C+A3.S*(y-sh.m)/sh.sd, dens=k=>sh.f[k]*sh.sd/A3.S;
+    let dmax=0;
+    for(let k=0;k<=SAS_N;k++){const x=toX(SAS_Y[k]);if(x<lo||x>hi)continue;dmax=Math.max(dmax,dens(k));}
+    const ov=A3.overlay;
+    if(ov)for(let b=0;b<FLBINS.length;b++)dmax=Math.max(dmax,FLBINS[b]/(67*FLBW));
+    if(!(dmax>0))dmax=1;
+    const Y=d=>BASE-d/dmax*HT;
+    /* curve */
+    let dpath="",started=false;
+    for(let k=0;k<=SAS_N;k++){const x=toX(SAS_Y[k]);if(x<lo-1e-9||x>hi+1e-9)continue;
+      dpath+=(started?"L":"M")+X(x).toFixed(1)+","+Y(dens(k)).toFixed(1)+" ";started=true;}
+    g.curve.setAttribute("d",dpath);
+    /* fat-tail shading beyond 2 SD, from the kurtosis step on */
+    if(i>=4){let t="",st=false;
+      for(let k=0;k<=SAS_N;k++){const x=toX(SAS_Y[k]);if(x<lo||x>hi)continue;
+        if(Math.abs(x-A3.C)<2*A3.S){if(st){t+="L"+X(x).toFixed(1)+","+BASE+" ";st=false;}continue;}
+        if(!st){t+="M"+X(x).toFixed(1)+","+BASE+" ";st=true;}
+        t+="L"+X(x).toFixed(1)+","+Y(dens(k)).toFixed(1)+" ";}
+      g.tail.setAttribute("d",t);op(g.tail,0.4);}
+    else op(g.tail,0);
+    /* Florida histogram */
+    op(g.hist,ov?1:0);
+    if(ov)FLBINS.forEach((c,b)=>{const a=FLB0+b*FLBW,r=g.hbars[b];
+      r.setAttribute("x",X(a)+1);r.setAttribute("width",Math.max(0,X(a+FLBW)-X(a)-2));
+      const h=BASE-Y(c/(67*FLBW));r.setAttribute("y",BASE-h);r.setAttribute("height",Math.max(0,h));});
+    /* axis */
+    clear(g.ticks);
+    for(let v=Math.ceil(lo/M.tick)*M.tick;v<=hi+1e-9;v+=M.tick){const x=X(v);
+      E("line",{x1:x,x2:x,y1:BASE,y2:BASE+7,stroke:NU,"stroke-width":1.5},g.ticks);
+      T(x,BASE+28,M.fmt(v),{s:14,f:MU,m:1,p:g.ticks});}
+    /* mean and median */
+    const xm=X(A3.C),xd=X(toX(sh.med));
+    g.meanL.setAttribute("x1",xm);g.meanL.setAttribute("x2",xm);
+    g.medL.setAttribute("x1",xd);g.medL.setAttribute("x2",xd);
+    g.meanT.setAttribute("x",xm);g.medT.setAttribute("x",xd);
+    g.meanT.textContent="mean "+M.fmt(A3.C);
+    g.medT.textContent="median "+M.fmt(Math.round(toX(sh.med)));
+    /* SD bracket */
+    op(g.sdG,i>=2?1:0);
+    const a=X(A3.C-A3.S),b2=X(A3.C+A3.S);
+    g.sdLine.setAttribute("x1",a);g.sdLine.setAttribute("x2",b2);
+    g.sdL.setAttribute("x1",a);g.sdL.setAttribute("x2",a);
+    g.sdR.setAttribute("x1",b2);g.sdR.setAttribute("x2",b2);
+    g.sdT.setAttribute("x",(a+b2)/2);g.sdT.textContent="one SD either side  ·  SD "+M.fmt(A3.S);
+    /* readouts */
+    g.ro.mean.textContent=M.fmt(A3.C);
+    g.ro.median.textContent=M.fmt(Math.round(toX(sh.med)));
+    g.ro.SD.textContent=M.fmt(A3.S);
+    g.ro.skewness.textContent=neg(f2(sh.skew));
+    g.ro.kurtosis.textContent=f2(sh.kurt);
+    g.note.textContent=ov?"Florida income: skew 0.41, kurt 2.45":
+      (sh.skew>0.08?"mean above median: a right tail":sh.skew<-0.08?"mean below median: a left tail":"symmetric: mean = median");
+    g.note2.textContent=ov?"mild right lean, no wild outliers":
+      (sh.kurt>3.15?"fatter tails than the bell":sh.kurt<2.85?"thinner tails than the bell":"exactly the bell's tails");
+    /* control outputs */
+    const oc=document.getElementById("oc"),os=document.getElementById("os"),
+          ok=document.getElementById("ok"),ou=document.getElementById("ou");
+    if(oc)oc.textContent=M.fmt(A3.C);
+    if(os)os.textContent=M.fmt(A3.S);
+    if(ok)ok.textContent=neg(f2(sh.skew));
+    if(ou)ou.textContent=f2(sh.kurt);
+    const fb=ctrlsEl.querySelector('[data-act="fl"]');
+    if(fb){fb.setAttribute("aria-current",String(A3.mode==="fl"));
+      fb.textContent=A3.mode==="fl"?"back to the plain curve":"show Florida income";}
+  }
+});
+
+/* =====================================================================
+   A4 · THE NORMAL, BUILT UP — 9 steps
+   ===================================================================== */
+function nCurve(X,mu,sig,lo,hi,base,h){let d="";const N=220;
+  for(let q=0;q<=N;q++){const v=lo+(hi-lo)*q/N,z=(v-mu)/sig;
+    d+=(q?"L":"M")+X(v).toFixed(1)+","+(base-h*Math.exp(-(z*z)/2)).toFixed(1)+" ";}
+  return d;}
+function nArea(X,mu,sig,a,b,base,h){
+  return nCurve(X,mu,sig,a,b,base,h)+"L"+X(b).toFixed(1)+","+base+" L"+X(a).toFixed(1)+","+base+" Z";}
+const NRM={mu:0,sig:1};
+const SAYTABLE={
+  key:"saytable",
+  caption:'<b>How to read it.</b> The notation left to right, one symbol at a time.',
+  cols:[{h:"symbol"},{h:"it reads"}],
+  rows:[
+    {g:"X",c:["X","the thing you are measuring"]},
+    {g:"~",c:["~","is distributed as"]},
+    {g:"N",c:["N","normal — the bell"]},
+    {g:"mu",c:["μ","the mean: where it sits"]},
+    {g:"s2",c:["σ²","the variance: how wide, squared"]},
+    {g:"s",c:["σ","the standard deviation: how wide"]},
+    {g:"all",c:["X ~ N(μ, σ²)","X is distributed normal, with mean mu and variance sigma squared"]},
+    {g:"b1",c:["μ ± σ","holds 68% of everything"]},
+    {g:"b2",c:["μ ± 2σ","holds 95%"]},
+    {g:"b3",c:["μ ± 3σ","holds 99.7%"]},
+    {g:"z",c:["z = (x − μ)/σ","how many SDs from typical"]}
+  ]
+};
+
+scene({
+  tab:"4 · The normal, built up",
+  table(i){return i>=8?A3TABLE:SAYTABLE;},
+  steps:[
+    {t:"Before the formula, the sentence.",
+     c:"An empty axis. We are going to write one line of notation, one symbol at a time, and every symbol is a word."},
+    {t:"X",c:"<b>The thing you are measuring.</b> A county's income, a student's score, tomorrow's return."},
+    {t:"~",c:"Reads <b>is distributed as</b>. Not an equals sign, not an approximation. It says <b>follows this shape</b>."},
+    {t:"N",c:"<b>N for normal.</b> The name of the shape — the bell. Nothing more mysterious than a name."},
+    {t:"(μ, σ²)",c:"<b>The only two numbers you have to supply.</b> Where it sits, and how wide it is."},
+    {t:"And here is the shape those five symbols name.",
+     c:"The curve draws itself. μ is marked on the axis, and σ is the distance from the middle out to the shoulder of the bell."},
+    {t:"Two knobs, and the shape never changes.",
+     c:"The buttons are live. <b>μ slides the curve; σ stretches it.</b> Everything else about a normal curve is fixed forever. Try μ = 100, σ = 15."},
+    {t:"68 — 95 — 99.7.",
+     c:"Within μ ± σ, <b>68%</b>. Within μ ± 2σ, <b>95%</b>. Within μ ± 3σ, <b>99.7%</b>. These three numbers do not depend on μ or σ."},
+    {t:"Checked on the real thing: 67 Florida counties.",
+     c:"Per capita income, mean $37,096, SD $10,200. Within one SD: <b>67%</b> of counties. Within two: <b>96%</b>. The rule holds."}
+  ],
+  ctrls:`<div class="ctrl" id="n1"><span class="lbl">μ</span><button data-act="mu-">−</button><output id="omu">0</output><button data-act="mu+">+</button></div>
+    <div class="ctrl" id="n2"><span class="lbl">σ</span><button data-act="sg-">−</button><output id="osg">1</output><button data-act="sg+">+</button></div>
+    <div class="ctrl" id="n3"><button class="btn soft" data-act="p100">μ 100, σ 15</button><button class="btn soft" data-act="p01">μ 0, σ 1</button></div>`,
+  act(a){
+    if(a==="mu+")NRM.mu+=10; if(a==="mu-")NRM.mu-=10;
+    if(a==="sg+")NRM.sig=+(NRM.sig+0.5).toFixed(1);
+    if(a==="sg-")NRM.sig=Math.max(0.5,+(NRM.sig-0.5).toFixed(1));
+    if(a==="p100"){NRM.mu=100;NRM.sig=15;} if(a==="p01"){NRM.mu=0;NRM.sig=1;}
+    this.paint(built,pi);
+  },
+  build(){
+    const g={},X0=110,X1=880,BASE=480,HT=250;
+    g.X0=X0;g.X1=X1;g.BASE=BASE;g.HT=HT;
+    E("line",{x1:X0-20,x2:X1+20,y1:BASE,y2:BASE,stroke:GR,"stroke-width":2});
+    g.ticks=E("g",{});
+    g.hist=E("g",{opacity:0});
+    g.hbars=FLBINS.map(()=>E("rect",{x:0,y:BASE,width:0,height:0,fill:BS,opacity:.35},g.hist));
+    g.bands=[3,2,1].map(()=>E("path",{d:"",fill:OR,opacity:0}));
+    g.curve=E("path",{d:"",fill:"none",stroke:INK,"stroke-width":3.5,"stroke-linejoin":"round"});
+    g.muLine=E("line",{x1:0,x2:0,y1:BASE-HT-8,y2:BASE,stroke:NU,"stroke-width":1.6,"stroke-dasharray":"4 4",opacity:0});
+    g.muLab=T(0,BASE-HT-18,"",{s:17,m:1,f:MU,o:0});
+    g.sgG=E("g",{opacity:0});
+    g.sgLine=E("line",{x1:0,x2:0,y1:BASE-100,y2:BASE-100,stroke:BS,"stroke-width":2.5},g.sgG);
+    g.sgTxt=T(0,BASE-108,"",{s:16,w:600,f:BS,m:1,p:g.sgG});
+    /* brackets */
+    g.brk=[0,1,2].map(q=>{const G=E("g",{opacity:0});
+      return {G:G,
+        line:E("line",{x1:0,x2:0,y1:BASE+52+q*30,y2:BASE+52+q*30,stroke:OR,"stroke-width":2.5},G),
+        l:E("line",{x1:0,x2:0,y1:BASE+44+q*30,y2:BASE+60+q*30,stroke:OR,"stroke-width":2.5},G),
+        r:E("line",{x1:0,x2:0,y1:BASE+44+q*30,y2:BASE+60+q*30,stroke:OR,"stroke-width":2.5},G),
+        pct:T(0,BASE+47+q*30,["68%","95%","99.7%"][q],{s:17,w:600,f:OR,m:1,p:G}),
+        lo:T(0,BASE+57+q*30,"",{a:"end",s:14,m:1,f:INK,p:G}),
+        hi:T(0,BASE+57+q*30,"",{a:"start",s:14,m:1,f:INK,p:G}),
+        tag:T(X1+30,BASE+58+q*30,"μ ± "+(q+1)+"σ",{a:"start",s:14,m:1,f:MU,p:G})};});
+    /* the notation, large at first then parked at the top */
+    g.form=E("g",{});
+    const PIECE=[["X",300],["~",450],["N",590],["(μ, σ²)",780]];
+    g.pc=PIECE.map(p=>T(p[1],300,p[0],{s:76,w:600,f:INK,o:0,p:g.form}));
+    g.gl=[["the thing you","are measuring",300],["is distributed as","",450],
+          ["normal —","the bell",590],["where it sits,","how wide",780]]
+      .map(d=>[T(d[2],348,d[0],{s:16,f:MU,o:0,p:g.form}),T(d[2],368,d[1],{s:16,f:MU,o:0,p:g.form})]);
+    g.say=T(540,430,"",{s:22,w:600,f:OR,o:0,p:g.form});
+    /* right-hand readout */
+    g.read=E("g",{opacity:0});
+    E("rect",{x:910,y:96,width:272,height:210,rx:10,fill:PAN},g.read);
+    T(930,128,"band edges",{a:"start",s:18,w:600,p:g.read});
+    g.rl=[0,1,2].map(q=>T(930,168+q*40,"",{a:"start",s:17,m:1,f:INK,p:g.read}));
+    g.rl2=T(930,282,"",{a:"start",s:14,f:MU,p:g.read});
+    g.flRead=T(1182,360,"",{a:"end",s:19,w:600,f:OR,m:1,o:0});
+    g.flRead2=T(1182,386,"",{a:"end",s:16,f:MU,m:1,o:0});
+    return g;
+  },
+  render(g,i){
+    stopAnim();
+    ["n1","n2","n3"].forEach(id=>{const d=document.getElementById(id);
+      if(d)d.classList.toggle("live",i===6||i===7);});
+    g.pc.forEach((n,q)=>op(n,i>=q+1?1:0));
+    g.gl.forEach((pair,q)=>pair.forEach(n=>op(n,(i>=q+1&&i<=4)?1:0)));
+    g.say.textContent="";
+    op(g.say,i===4?1:0);
+    /* park the formula at the top once the curve arrives */
+    g.form.setAttribute("transform",i>=5?"translate(303,-30) scale(0.42)":"translate(0,0) scale(1)");
+    this.paint(g,i);
+    if(i===5){/* draw the curve on */
+      const L=g.curve.getTotalLength?g.curve.getTotalLength():2000;
+      g.curve.setAttribute("stroke-dasharray",L);g.curve.setAttribute("stroke-dashoffset",L);
+      tween(900,p=>g.curve.setAttribute("stroke-dashoffset",L*(1-p)),
+        ()=>{g.curve.removeAttribute("stroke-dasharray");g.curve.removeAttribute("stroke-dashoffset");});
+    } else {g.curve.removeAttribute("stroke-dasharray");g.curve.removeAttribute("stroke-dashoffset");}
+  },
+  paint(g,i){
+    const X0=g.X0,X1=g.X1,BASE=g.BASE,HT=g.HT;
+    const fl=(i===8);
+    const mu=fl?37096:NRM.mu, sig=fl?10200:NRM.sig;
+    const lo=fl?mu-3.2*sig:mu-4.2*sig, hi=fl?mu+3.2*sig:mu+4.2*sig;
+    const X=v=>X0+(v-lo)/(hi-lo)*(X1-X0);
+    const fmt=v=>fl?"$"+f0(v):neg((+v.toFixed(2)).toLocaleString("en-US"));
+    /* curve height: in Florida mode the bell shares the histogram's density scale */
+    let H=HT;
+    if(fl){const pk=pdfN(0)/sig,bmax=Math.max.apply(null,FLBINS.map(c=>c/(67*FLBW)));
+      H=HT*pk/Math.max(pk,bmax);}
+    op(g.curve,i>=5?1:0);
+    g.curve.setAttribute("d",nCurve(X,mu,sig,lo,hi,BASE,H));
+    /* bands */
+    const nb=i>=7?3:0;
+    g.bands.forEach((p,q)=>{const k=3-q;
+      p.setAttribute("d",nArea(X,mu,sig,mu-k*sig,mu+k*sig,BASE,H));
+      p.setAttribute("opacity",k<=nb?[.16,.28,.42][k-1]:0);});
+    g.brk.forEach((b,q)=>{const k=q+1,a=mu-k*sig,c=mu+k*sig;
+      op(b.G,k<=nb?1:0);
+      b.line.setAttribute("x1",X(a));b.line.setAttribute("x2",X(c));
+      b.l.setAttribute("x1",X(a));b.l.setAttribute("x2",X(a));
+      b.r.setAttribute("x1",X(c));b.r.setAttribute("x2",X(c));
+      b.pct.setAttribute("x",X(mu));
+      b.lo.setAttribute("x",X(a)-8);b.hi.setAttribute("x",X(c)+8);
+      b.lo.textContent=fmt(a);b.hi.textContent=fmt(c);});
+    /* mu and sigma marks */
+    op(g.muLine,i>=5?1:0);op(g.muLab,i>=5?1:0);
+    g.muLine.setAttribute("x1",X(mu));g.muLine.setAttribute("x2",X(mu));
+    g.muLine.setAttribute("y1",BASE-H-8);
+    g.muLab.setAttribute("x",X(mu));g.muLab.setAttribute("y",BASE-H-18);
+    g.muLab.textContent=(fl?"mean ":"μ = ")+fmt(mu);
+    op(g.sgG,(i>=5&&i<=6)?1:0);
+    const ys=BASE-H*Math.exp(-0.5);
+    g.sgLine.setAttribute("x1",X(mu));g.sgLine.setAttribute("x2",X(mu+sig));
+    g.sgLine.setAttribute("y1",ys);g.sgLine.setAttribute("y2",ys);
+    g.sgTxt.setAttribute("x",X(mu+sig/2));g.sgTxt.setAttribute("y",ys-10);
+    g.sgTxt.textContent="σ = "+fmt(sig);
+    /* axis */
+    clear(g.ticks);
+    const step=fl?10000:niceStep((hi-lo)/8);
+    for(let v=Math.ceil(lo/step)*step;v<=hi+1e-9;v+=step){const x=X(v);
+      E("line",{x1:x,x2:x,y1:BASE,y2:BASE+7,stroke:NU,"stroke-width":1.5},g.ticks);
+      T(x,BASE+28,fl?"$"+f0(v):neg((+v.toFixed(6)).toLocaleString("en-US")),{s:14,f:MU,m:1,p:g.ticks});}
+    /* Florida histogram */
+    op(g.hist,fl?1:0);
+    if(fl)FLBINS.forEach((c,b)=>{const a=FLB0+b*FLBW,r=g.hbars[b];
+      const bmax=Math.max.apply(null,FLBINS.map(v=>v/(67*FLBW)));
+      const h=HT*(c/(67*FLBW))/Math.max(pdfN(0)/sig,bmax);
+      r.setAttribute("x",X(a)+1);r.setAttribute("width",Math.max(0,X(a+FLBW)-X(a)-2));
+      r.setAttribute("y",BASE-h);r.setAttribute("height",Math.max(0,h));});
+    /* readouts */
+    op(g.read,i>=6?1:0);
+    g.rl.forEach((n,q)=>{const k=q+1;
+      n.textContent="μ ± "+k+"σ:  "+fmt(mu-k*sig)+" to "+fmt(mu+k*sig);});
+    g.rl2.textContent=i>=7?"68 / 95 / 99.7 never move":"σ is the distance to the shoulder";
+    op(g.flRead,fl?1:0);op(g.flRead2,fl?1:0);
+    g.flRead.textContent="within 1 SD: 45 of 67 = 67%";
+    g.flRead2.textContent="within 2 SD: 64 of 67 = 96%";
+    const omu=document.getElementById("omu"),osg=document.getElementById("osg");
+    if(omu)omu.textContent=neg(String(NRM.mu)); if(osg)osg.textContent=String(NRM.sig);
+  }
+});
+
+/* =====================================================================
+   A6 · ONE RULER — SAT and ACT, 7 steps
+   ===================================================================== */
+const SAT={mu:1024,sd:229,x:1300,lab:"SAT"}, ACT={mu:19.4,sd:5.9,x:29,lab:"ACT"};
+const RX0=140,RX1=940;
+function curveD(cxp,sigp,base,h,z0,z1){let d="";
+  for(let q=0;q<=120;q++){const z=z0+(z1-z0)*q/120;
+    d+=(q?"L":"M")+(cxp+z*sigp).toFixed(1)+","+(base-h*Math.exp(-(z*z)/2)).toFixed(1)+" ";}
+  return d;}
+function dotStrip(parent,vals,X,y,hiIdx){
+  const r=mul(3);
+  vals.forEach((v,k)=>{const hi=k===hiIdx;
+    E("circle",{cx:X(v),cy:y+(r()-0.5)*26,r:hi?8:5,fill:hi?OR:NU,opacity:hi?1:.55,
+      stroke:hi?INK:"none","stroke-width":2},parent);});
+}
+const ZTABLE={
+  key:"zref",
+  caption:'<b>The z ruler.</b> z = (x − μ)/σ, and the share of a normal population below it. Source: the standard normal table (Φ), computed here.',
+  cols:[{h:"z",n:1},{h:"below",n:1},{h:"how to say it"}],
+  rows:[[-2,"two SDs below typical"],[-1,"one SD below"],[-0.5,"slightly below"],[0,"exactly typical"],
+        [0.5,"slightly above"],[1,"one SD above"],[1.2052,"the SAT 1,300"],[1.5,"well above"],
+        [1.6271,"the ACT 29"],[2,"two SDs above"],[3,"a once-in-370 score"]]
+    .map(d=>({g:String(d[0]),c:[neg(f2(d[0])),(Phi(d[0])*100).toFixed(1)+"%",d[1]]}))
+};
+
+scene({
+  tab:"5 · One ruler",
+  table(i){return i>=6?A3TABLE:ZTABLE;},
+  steps:[
+    {t:"Who did better: SAT 1,300 or ACT 29?",
+     c:"2024 national figures. SAT: mean 1,024, SD 229. ACT: mean 19.4, SD 5.9. Two different rulers; you cannot subtract them."},
+    {t:"Step one: subtract the mean.",
+     c:"Both curves slide so their centres sit at 0. The axes now read <b>deviations</b>: +276 and +9.6. Still two rulers — 276 what, against 9.6 what?"},
+    {t:"Step two: divide by the SD.",
+     c:"Both curves stretch or shrink to SD 1. The two axes have become <b>one z axis</b>."},
+    {t:"One axis, two marks.",
+     c:"Now — and only now — the two scores are on the same ruler and can be compared directly."},
+    {t:"z = 1.21 and z = 1.63.",
+     c:"<b>Z = (X − μ) / σ</b>. 276 / 229 = 1.21; 9.6 / 5.9 = 1.63. <b>The ACT score is the more unusual one.</b>"},
+    {t:"How many test takers sit below each mark?",
+     c:"Area to the left of z: <b>88.6%</b> below 1.21 and <b>94.8%</b> below 1.63. That is Φ(z), the normal table — and the third column of the panel on the right."},
+    {t:"Same county, two rulers.",
+     c:"Alachua's weekly wage $1,227 against the state (mean 1,061, SD 168): z = <b>0.99</b>. Its per-capita income $38,869 (mean 37,096, SD 10,200): z = <b>0.17</b>. Unusually well paid, ordinary income."}
+  ],
+  build(){
+    const g={};
+    g.tests=E("g",{});
+    g.pan=[SAT,ACT].map((t,q)=>{const P={};
+      P.g=E("g",{},g.tests);
+      P.axis=E("line",{x1:RX0-20,x2:RX1+20,y1:0,y2:0,stroke:GR,"stroke-width":2},P.g);
+      P.ticks=E("g",{},P.g);
+      P.shade=E("path",{d:"",fill:q?BL:OR,opacity:0},P.g);
+      P.curve=E("path",{d:"",fill:"none",stroke:q?BL:OR,"stroke-width":3.5},P.g);
+      P.mark=E("line",{x1:0,x2:0,y1:0,y2:0,stroke:q?BL:OR,"stroke-width":3},P.g);
+      P.markLab=T(0,0,"",{s:19,w:600,f:q?BL:OR,m:1,p:P.g});
+      P.name=T(10,0,t.lab,{a:"start",s:24,w:600,f:q?BL:OR,p:P.g});
+      P.sub=T(10,0,"",{a:"start",s:15,f:MU,m:1,p:P.g});
+      P.pct=T(0,0,"",{s:20,w:600,f:q?BL:OR,m:1,o:0,p:P.g});
+      P.st={lo:0,hi:q?36:1600,mu:t.mu,sig:t.sd,base:q?560:280,h:150};
+      return P;});
+    g.zform=T(600,44,"",{s:22,m:1,w:600,f:INK,o:0});
+    /* the county step */
+    g.county=E("g",{opacity:0});
+    const ai=FL.findIndex(d=>d[0]==="Alachua");
+    const wages=FL.map(d=>d[3]),incs=FL.map(d=>d[2]);
+    const sw=stats(wages),sinc=stats(incs);
+    [[wages,sw,"weekly wage, 67 counties",1227,200],[incs,sinc,"per capita income, 67 counties",38869,460]]
+      .forEach(d=>{
+      const vals=d[0],s=d[1],lab=d[2],val=d[3],y=d[4];
+      const lo=s.mean-3.2*s.sd,hi=s.mean+3.2*s.sd,X=v=>RX0+(v-lo)/(hi-lo)*(RX1-RX0);
+      E("line",{x1:RX0-20,x2:RX1+20,y1:y+30,y2:y+30,stroke:GR,"stroke-width":2},g.county);
+      [-3,-2,-1,0,1,2,3].forEach(k=>{const v=s.mean+k*s.sd,x=X(v);
+        E("line",{x1:x,x2:x,y1:y+30,y2:y+38,stroke:NU,"stroke-width":1.5},g.county);
+        T(x,y+58,"$"+f0(v),{s:14,f:MU,m:1,p:g.county});
+        T(x,y+76,"z = "+neg(k),{s:13,f:MU,m:1,p:g.county});});
+      E("rect",{x:X(s.mean-s.sd),y:y-20,width:X(s.mean+s.sd)-X(s.mean-s.sd),height:40,
+        fill:OR,opacity:.10,rx:6},g.county);
+      dotStrip(g.county,vals,X,y,ai);
+      const z=(val-s.mean)/s.sd,rank=1+vals.filter(v=>v>val).length;
+      T(10,y+4,lab,{a:"start",s:17,w:600,p:g.county});
+      T(10,y+24,"mean "+f0(s.mean)+"  ·  SD "+f0(s.sd),{a:"start",s:14,f:MU,m:1,p:g.county});
+      E("line",{x1:X(val),x2:X(val),y1:y-40,y2:y-16,stroke:OR,"stroke-width":3},g.county);
+      T(X(val),y-48,"Alachua $"+f0(val)+"   z = ("+f0(val)+" − "+f0(s.mean)+") / "+f0(s.sd)+
+        " = "+f2(z)+"   ·   rank "+rank+" of 67",{s:18,w:600,f:OR,m:1,p:g.county});
+    });
+    T(600,592,"Miami-Dade wage z = 2.57   ·   Calhoun wage z = −1.54",{s:16,f:MU,m:1,p:g.county});
+    return g;
+  },
+  render(g,i){
+    stopAnim();
+    const tests=i<=5,county=i===6;
+    op(g.tests,tests?1:0);op(g.county,county?1:0);
+    if(tests){
+      const targets=g.pan.map((P,q)=>{const t=q?ACT:SAT;
+        if(i===0)return{lo:0,hi:q?36:1600,mu:t.mu,sig:t.sd,base:q?560:280,h:150,mode:0};
+        if(i===1)return{lo:-t.mu,hi:(q?36:1600)-t.mu,mu:0,sig:t.sd,base:q?560:280,h:150,mode:1};
+        if(i===2)return{lo:-4,hi:4,mu:0,sig:1,base:q?560:280,h:150,mode:2};
+        return{lo:-4,hi:4,mu:0,sig:1,base:q?520:430,h:280,mode:3};});
+      const from=g.pan.map(P=>Object.assign({},P.st));
+      tween(700,p=>{g.pan.forEach((P,q)=>{const a=from[q],b=targets[q];
+        P.st={lo:a.lo+(b.lo-a.lo)*p,hi:a.hi+(b.hi-a.hi)*p,mu:a.mu+(b.mu-a.mu)*p,
+              sig:a.sig+(b.sig-a.sig)*p,base:a.base+(b.base-a.base)*p,h:a.h+(b.h-a.h)*p,mode:b.mode};
+        this.paintPanel(P,q,i);});});
+      g.zform.textContent=i>=4?
+        "z = (x − μ) / σ        SAT: (1,300 − 1,024) / 229 = 1.21        ACT: (29 − 19.4) / 5.9 = 1.63":
+        "z = (x − μ) / σ";
+    }
+    op(g.zform,(tests&&i>=2)?1:0);
+  },
+  paintPanel(P,q,i){
+    const t=q?ACT:SAT,s=P.st,X=v=>RX0+(v-s.lo)/(s.hi-s.lo)*(RX1-RX0);
+    const sigp=s.sig*(RX1-RX0)/(s.hi-s.lo),cxp=X(s.mu);
+    P.axis.setAttribute("y1",s.base);P.axis.setAttribute("y2",s.base);
+    const zL=Math.max(-4,(RX0-140-cxp)/sigp), zR=Math.min(4,(RX1+140-cxp)/sigp);
+    P.curve.setAttribute("d",curveD(cxp,sigp,s.base,s.h,zL,zR));
+    const zmark=(t.x-t.mu)/t.sd, xm=cxp+zmark*sigp;
+    P.mark.setAttribute("x1",xm);P.mark.setAttribute("x2",xm);
+    P.mark.setAttribute("y1",s.base-s.h*Math.exp(-(zmark*zmark)/2)-30);P.mark.setAttribute("y2",s.base);
+    P.markLab.setAttribute("x",xm);
+    P.markLab.setAttribute("y",s.base-s.h*Math.exp(-(zmark*zmark)/2)-40);
+    P.markLab.textContent=s.mode===0?t.lab+" "+t.x.toLocaleString("en-US"):
+      s.mode===1?(q?"+9.6":"+276"):(i>=4?t.lab+"  z = "+f2(zmark):t.lab);
+    P.name.setAttribute("y",s.base-30);P.sub.setAttribute("y",s.base-8);
+    P.sub.textContent=s.mode===0?"mean "+t.mu.toLocaleString("en-US")+" · SD "+t.sd:
+      s.mode===1?"deviation from the mean":s.mode===2?"z = deviation / SD":"";
+    op(P.name,s.mode===3?0:1);op(P.sub,s.mode===3?0:1);
+    clear(P.ticks);
+    const step=niceStep((s.hi-s.lo)/8);
+    for(let v=Math.ceil(s.lo/step)*step;v<=s.hi+1e-9;v+=step){const x=X(v);
+      if(x<RX0-25||x>RX1+25)continue;
+      E("line",{x1:x,x2:x,y1:s.base,y2:s.base+7,stroke:NU,"stroke-width":1.5},P.ticks);
+      T(x,s.base+28,neg((s.mode===1&&v>0?"+":"")+v.toLocaleString("en-US")),{s:14,f:MU,m:1,p:P.ticks});}
+    const sh=i>=5;
+    if(sh){P.shade.setAttribute("d",curveD(cxp,sigp,s.base,s.h,-4,zmark)+
+      "L"+xm.toFixed(1)+","+s.base+" L"+(cxp-4*sigp).toFixed(1)+","+s.base+" Z");}
+    P.shade.setAttribute("opacity",sh?(q?.18:.28):0);
+    op(P.pct,sh?1:0);P.pct.setAttribute("x",cxp-1.35*sigp);P.pct.setAttribute("y",s.base-46);
+    P.pct.textContent=t.lab+": "+(Phi(zmark)*100).toFixed(1)+"% below";
+    if(s.mode===3&&i>=4)P.markLab.setAttribute("y",s.base-s.h*Math.exp(-(zmark*zmark)/2)-40-(q?0:26));
+  }
+});
+
+/* =====================================================================
+   deck controller
+   ===================================================================== */
+let si=0, pi=0, built=null;
+const tabs=document.getElementById("tabs"), dots=document.getElementById("dots");
+SCENES.forEach((s,k)=>{
+  const b=document.createElement("button");
+  b.textContent=s.tab; b.onclick=e=>{e.stopPropagation();go(k,0);};
+  tabs.appendChild(b);
+});
+function go(s,p){
+  hideTip(); stopAnim(); hlRows(null,false);
+  if(s!==si||built===null){
+    si=s; while(sv.firstChild) sv.removeChild(sv.firstChild);
+    ctrlsEl.innerHTML=SCENES[si].ctrls||"";
+    ctrlsEl.classList.toggle("show",!!SCENES[si].ctrls);
+    built=SCENES[si].build();
+  }
+  const S=SCENES[si];
+  pi=Math.max(0,Math.min(S.steps.length-1,p));
+  setTable(S.table?S.table.call(S,pi):null);
+  S.render.call(S,built,pi);
+  const st=S.steps[pi];
+  document.getElementById("ttl").textContent=typeof st.t==="function"?st.t():st.t;
+  document.getElementById("cap").innerHTML=typeof st.c==="function"?st.c():st.c;
+  [...tabs.children].forEach((b,k)=>b.setAttribute("aria-current",k===si?"true":"false"));
+  document.getElementById("pos").innerHTML=S.pos?S.pos(pi):
+    "animation "+(si+1)+" of "+SCENES.length+"  ·  step "+(pi+1)+" of "+S.steps.length;
+  dots.innerHTML="";
+  S.steps.forEach((_,k)=>{const d=document.createElement("i");
+    if(k<=pi)d.className="on"; dots.appendChild(d);});
+}
+function step(d){
+  const S=SCENES[si];
+  if(pi+d<0){ if(si>0) go(si-1,SCENES[si-1].steps.length-1); return; }
+  if(pi+d>=S.steps.length){ if(si<SCENES.length-1) go(si+1,0); return; }
+  go(si,pi+d);
+}
+document.addEventListener("click",e=>{ if(e.target.closest(".noadv"))return; step(1); });
+document.addEventListener("keydown",e=>{
+  if(e.key==="ArrowRight"||e.key===" "||e.key==="PageDown"){e.preventDefault();step(1);}
+  else if(e.key==="ArrowLeft"||e.key==="PageUp"){e.preventDefault();step(-1);}
+  else if(e.key>="1"&&e.key<="5"){const k=+e.key-1; if(k<SCENES.length) go(k,0);}
+  else if(e.key==="d"||e.key==="D"){const S=SCENES[si]; if(S.reseed) S.reseed();}
+  else if(e.key==="f"||e.key==="F"){
+    document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}
+});
+/* per-scene controls */
+ctrlsEl.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]"); if(!b)return; e.stopPropagation();
+  const S=SCENES[si]; if(S.act) S.act.call(S,b.dataset.act,b);
+});
+go(0,0);
+})();
+</script>

@@ -5,17 +5,17 @@
   <script>try{if(localStorage.getItem("theme")==="dark")document.documentElement.setAttribute("data-theme","dark")}catch(e){}</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Teaching | Anand Mathew, University of Florida</title>
-  <meta name="description" content="Teaching by Anand Mathew at the University of Florida: instructor of record for undergraduate econometrics, and teaching assistant for data analysis, econometrics and public economics.">
+  <meta name="description" content="Teaching by Anand Mathew at the University of Florida: instructor of record for undergraduate econometrics, with interactive animations from the course.">
   <link rel="canonical" href="https://anandmathewecon.github.io/teaching.html">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Teaching | Anand Mathew, University of Florida">
-  <meta property="og:description" content="Teaching by Anand Mathew at the University of Florida: instructor of record for undergraduate econometrics, and teaching assistant for data analysis, econometrics and public economics.">
+  <meta property="og:description" content="Teaching by Anand Mathew at the University of Florida: instructor of record for undergraduate econometrics, with interactive animations from the course.">
   <meta property="og:url" content="https://anandmathewecon.github.io/teaching.html">
   <meta property="og:image" content="https://anandmathewecon.github.io/images/anand-mathew-portrait.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;600&family=Spectral:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261006c">
+  <link rel="stylesheet" href="style.css?v=20261006d">
 </head>
 <body>
 
@@ -55,6 +55,57 @@
         LaTeX.
       </p>
     </div>
+
+    <h2>Animations From the Course</h2>
+    <p class="demos-intro">
+      I build an interactive animation for most lectures, so students watch
+      an idea happen before they meet the formula. These are the ones from
+      Fall 2026. Each runs in the browser. Click or use the arrow keys to step
+      through it.
+    </p>
+
+    <ul class="demos">
+      <li>
+        <a class="thumb" href="teaching/counties.html" target="_blank" rel="noopener"><img src="teaching/thumbs/counties.jpg" alt="Every US county drawn as a dot on a map" loading="lazy"></a>
+        <div>
+          <h3><a href="teaching/counties.html" target="_blank" rel="noopener">Three Thousand Counties</a></h3>
+          <p class="when">Lecture 3, expectation and spread</p>
+          <p>Every county in the United States, one dot each. It builds the mean, the standard deviation and the conditional mean, then takes the country away and shows that an estimate from a sample is itself a random variable.</p>
+        </div>
+      </li>
+      <li>
+        <a class="thumb" href="teaching/dataset-shape.html" target="_blank" rel="noopener"><img src="teaching/thumbs/dataset-shape.jpg" alt="A three-dimensional grid of six boxes beside a table of 100 hires" loading="lazy"></a>
+        <div>
+          <h3><a href="teaching/dataset-shape.html" target="_blank" rel="noopener">Every Dataset Has a Shape</a></h3>
+          <p class="when">Lecture 5, joint and conditional distributions</p>
+          <p>A hundred new hires drop into six boxes and become a joint distribution, then its marginals and conditionals. Later parts walk through the Berkeley admissions case and build the normal distribution up from scratch.</p>
+        </div>
+      </li>
+      <li>
+        <a class="thumb" href="teaching/small-samples.html" target="_blank" rel="noopener"><img src="teaching/thumbs/small-samples.jpg" alt="Scatter of rushers' yards per carry against number of carries, forming a funnel" loading="lazy"></a>
+        <div>
+          <h3><a href="teaching/small-samples.html" target="_blank" rel="noopener">Small Samples, Noise and Bias</a></h3>
+          <p class="when">Lecture 9, sampling and the law of large numbers</p>
+          <p>Every carry of the 2026 college football season, plotted in the order it happened. Rushers with a handful of carries post the wildest averages, which is what a small sample looks like. The second part asks whether more data also fixes a biased aim.</p>
+        </div>
+      </li>
+      <li>
+        <a class="thumb" href="teaching/trust-a-slope.html" target="_blank" rel="noopener"><img src="teaching/thumbs/trust-a-slope.jpg" alt="A sample regression line next to the population line, with one observation's error and residual marked" loading="lazy"></a>
+        <div>
+          <h3><a href="teaching/trust-a-slope.html" target="_blank" rel="noopener">How Much Can You Trust a Slope?</a></h3>
+          <p class="when">Lecture 10, the sampling distribution of OLS</p>
+          <p>It separates the error from the residual, then redraws the sample again and again to build the distribution of the OLS slope. The last part shows what makes a slope precise: more data, less noise and more spread in X.</p>
+        </div>
+      </li>
+      <li>
+        <a class="thumb" href="teaching/changing-spread.html" target="_blank" rel="noopener"><img src="teaching/thumbs/changing-spread.jpg" alt="Scatter of prior offences against age with a fitted line, beside bars comparing standard errors" loading="lazy"></a>
+        <div>
+          <h3><a href="teaching/changing-spread.html" target="_blank" rel="noopener">Changing Spread</a></h3>
+          <p class="when">Lecture 11, heteroskedasticity and robust standard errors</p>
+          <p>Four hundred defendants from Broward County at a time. Redrawing the sample over and over shows the usual standard error understating how much the slope really moves, while the robust one tracks it.</p>
+        </div>
+      </li>
+    </ul>
 
     <h2>Teaching Assistant</h2>
 

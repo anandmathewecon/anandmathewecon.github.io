@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lecture 10 animations: how much can you trust a slope?</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --blue:#0021A5; --soft:#4A6FD4; --orange:#FA4616; --ink:#6B7280; --bg:#FCFCFE; }
+  html,body{margin:0;height:100%;background:var(--bg);font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;overflow:hidden}
+  #stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  svg{width:100vw;height:56.25vw;max-height:100vh;max-width:177.78vh}
+  #help{position:fixed;left:16px;bottom:12px;font-size:13px;color:#9AA1AE}
+  .btn{cursor:pointer}
+  @media (prefers-reduced-motion: reduce){ * { transition:none !important } }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div id="help">&rarr; &larr;: switch animation &nbsp;·&nbsp; Space: play / pause &nbsp;·&nbsp; R: restart &nbsp;·&nbsp; + / &minus;: speed &nbsp;·&nbsp; click the buttons to change settings &nbsp;·&nbsp; F: full screen</div>
+<script>
+// 2026 college football through Oct. 3, third and fourth downs, 1 to 15 yards to go: [yards to go, converted, number of plays]
+const CELLS=[[1,0,730],[1,1,1970],[2,0,782],[2,1,1047],[3,0,914],[3,1,969],[4,0,962],[4,1,807],[5,0,997],[5,1,693],[6,0,1060],[6,1,664],[7,0,1034],[7,1,583],[8,0,974],[8,1,410],[9,0,890],[9,1,352],[10,0,1250],[10,1,460],[11,0,547],[11,1,168],[12,0,429],[12,1,111],[13,0,361],[13,1,92],[14,0,334],[14,1,58],[15,0,318],[15,1,48]];
+const BALL={b0:0.67068,b1:-0.04168,n:20014, su:0.468, sx:3.757};
+const FLA={b1:-0.03841,n:62};
+</script>
+<script>
+"use strict";
+const NS="http://www.w3.org/2000/svg", svg=document.getElementById("svg");
+const C={blue:"#0021A5",soft:"#4A6FD4",orange:"#FA4616",ink:"#6B7280",dark:"#3A4150",pale:"#D4D8DE",grid:"#ECEEF2",bg:"#FCFCFE",chip:"#EEF1FA"};
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);(parent||svg).appendChild(e);return e;}
+function txt(x,y,s,o={},parent){const t=el("text",{x,y,"font-size":o.s||22,"font-weight":o.w||400,fill:o.f||C.ink,"text-anchor":o.a||"middle","dominant-baseline":"middle"},parent);t.textContent=s;if(o.op!==undefined)t.setAttribute("opacity",o.op);return t;}
+function clear(){while(svg.firstChild)svg.removeChild(svg.firstChild);}
+function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0,v=0;while(u===0)u=r();while(v===0)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+const CALM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function fmt(v,d){ const s=v.toFixed(d); return (v>0?"+":"")+s.replace("-","−"); }
+function fmtU(v,d){ return v.toFixed(d).replace("-","−"); }
+
+function ols(xs,ys){ const n=xs.length; let mx=0,my=0; for(let i=0;i<n;i++){mx+=xs[i];my+=ys[i];} mx/=n; my/=n;
+  let sxy=0,sxx=0; for(let i=0;i<n;i++){const dx=xs[i]-mx; sxy+=dx*(ys[i]-my); sxx+=dx*dx;}
+  const b1=sxy/sxx, b0=my-b1*mx; let ssr=0, rob=0;
+  for(let i=0;i<n;i++){const e=ys[i]-b0-b1*xs[i]; ssr+=e*e; const dx=xs[i]-mx; rob+=dx*dx*e*e;}
+  const se=Math.sqrt(ssr/(n-2)/sxx), serob=Math.sqrt(rob/(sxx*sxx)*n/(n-2));
+  return {b0,b1,se,serob,mx,sxx}; }
+function sd(v){ if(v.length<2) return NaN; const m=v.reduce((s,x)=>s+x,0)/v.length; return Math.sqrt(v.reduce((s,x)=>s+(x-m)*(x-m),0)/(v.length-1)); }
+function mean(v){ return v.reduce((s,x)=>s+x,0)/v.length; }
+
+function header(q,chip){
+  txt(800,58,q,{s:34,w:600,f:C.dark});
+  if(chip){const g=el("g",{});el("rect",{x:1330,y:24,width:240,height:40,rx:20,fill:C.chip},g);txt(1450,45,chip,{s:17,f:C.blue,w:600},g);}
+}
+let captionEl=null;
+function caption(s,col){ if(captionEl) captionEl.remove(); captionEl=txt(800,858,s,{s:27,w:600,f:col||C.blue,op:0}); fadeTo(captionEl,1,600); }
+let fades=[];
+function fadeTo(e,to,ms){fades.push({e,from:+(e.getAttribute("opacity")||0),to,ms,t0:performance.now()});}
+function tickFades(now){fades=fades.filter(f=>{const k=Math.min(1,(now-f.t0)/f.ms);f.e.setAttribute("opacity",f.from+(f.to-f.from)*k);return k<1;});}
+
+// pill buttons: returns a setter that highlights index j
+function pills(y,x0,labels,label,onPick,w){
+  w=w||110; const out=[];
+  txt(x0-24,y,label,{s:18,f:C.ink,a:"end"});
+  labels.forEach((s,j)=>{ const x=x0+j*(w+12)+w/2, g=el("g",{class:"btn"});
+    const r=el("rect",{x:x-w/2,y:y-20,width:w,height:40,rx:20,fill:C.chip},g); const t=txt(x,y+1,s,{s:18,w:600,f:C.blue},g);
+    g.addEventListener("click",()=>onPick(j)); out.push({r,t}); });
+  return j=>out.forEach((b,i)=>{b.r.setAttribute("fill",i===j?C.blue:C.chip); b.t.setAttribute("fill",i===j?"#FFFFFF":C.blue);});
+}
+function axes(P,xt,yt,xlab,ylab,fx,fy){
+  for(const v of yt){el("line",{x1:P.x0,x2:P.x1,y1:P.sy(v),y2:P.sy(v),stroke:C.grid,"stroke-width":2});txt(P.x0-14,P.sy(v),fy?fy(v):String(v),{s:17,a:"end"});}
+  for(const v of xt){el("line",{x1:P.sx(v),x2:P.sx(v),y1:P.y0,y2:P.y1,stroke:C.grid,"stroke-width":2});txt(P.sx(v),P.y1+24,fx?fx(v):String(v),{s:17});}
+  txt((P.x0+P.x1)/2,P.y1+56,xlab,{s:20,f:C.dark});
+  const yl=txt(P.x0-70,(P.y0+P.y1)/2,ylab,{s:20,f:C.dark}); yl.setAttribute("transform",`rotate(-90 ${P.x0-70} ${(P.y0+P.y1)/2})`);
+}
+function plotArea(x0,x1,y0,y1,xmin,xmax,ymin,ymax){ return {x0,x1,y0,y1,sx:v=>x0+(v-xmin)/(xmax-xmin)*(x1-x0), sy:v=>y1-(v-ymin)/(ymax-ymin)*(y1-y0), xmin,xmax,ymin,ymax}; }
+let clipN=0;
+function clipTo(P){ const id="cp"+(clipN++); const cp=el("clipPath",{id}); el("rect",{x:P.x0,y:P.y0,width:P.x1-P.x0,height:P.y1-P.y0},cp); return el("g",{"clip-path":`url(#${id})`}); }
+function lineEnds(P,b0,b1){ return {x1:P.sx(P.xmin),y1:P.sy(b0+b1*P.xmin),x2:P.sx(P.xmax),y2:P.sy(b0+b1*P.xmax)}; }
+
+/* ---------- smooth motion helpers: frame-rate independent easing ---------- */
+function ez(dt,tau){ return (CALM||tau<=0)?1:1-Math.exp(-dt/tau); }
+function toward(cur,tgt,k){ return cur+(tgt-cur)*k; }
+function setLine(e,L){ e.setAttribute("x1",L.x1.toFixed(1)); e.setAttribute("y1",L.y1.toFixed(1)); e.setAttribute("x2",L.x2.toFixed(1)); e.setAttribute("y2",L.y2.toFixed(1)); }
+
+/* =====================================================================
+   SCENE 1: the error and the residual
+   ===================================================================== */
+const A={};
+function startA(){
+  clear(); fades=[]; captionEl=null;
+  header("The error and the residual: which one moves?","Animation 1 of 3");
+  A.P=plotArea(250,1150,140,740,0,16,0,100); const P=A.P;
+  axes(P,[0,4,8,12,16],[0,25,50,75,100],"X","Y");
+  A.clip=clipTo(P);
+  A.B0=78; A.B1=-3; A.SIG=10; A.HX=11; A.HU=17; // the highlighted observation: X = 11, error u = +17
+  el("line",{...lineEnds(P,A.B0,A.B1),stroke:C.blue,"stroke-width":4,"stroke-dasharray":"12 9"},A.clip);
+  A.ptsG=el("g",{},A.clip); A.fit=el("line",{stroke:C.orange,"stroke-width":5,opacity:0},A.clip);
+  A.hy=A.B0+A.B1*A.HX+A.HU;
+  A.uSeg=el("line",{x1:P.sx(A.HX)-14,x2:P.sx(A.HX)-14,y1:P.sy(A.hy),y2:P.sy(A.B0+A.B1*A.HX),stroke:C.blue,"stroke-width":5});
+  A.uhSeg=el("line",{x1:P.sx(A.HX)+14,x2:P.sx(A.HX)+14,y1:P.sy(A.hy),y2:P.sy(A.hy),stroke:C.orange,"stroke-width":5});
+  el("circle",{cx:P.sx(A.HX),cy:P.sy(A.hy),r:11,fill:"#111827"});
+  txt(P.sx(A.HX)+20,P.sy(A.hy)-26,"one observation",{s:19,w:600,f:"#111827",a:"start"});
+  const L=el("g",{}); el("rect",{x:1200,y:150,width:360,height:330,rx:14,fill:"#FFFFFF",stroke:C.pale},L);
+  el("line",{x1:1225,x2:1285,y1:190,y2:190,stroke:C.blue,"stroke-width":4,"stroke-dasharray":"12 9"},L); txt(1300,190,"population line",{s:19,a:"start",f:C.dark},L);
+  el("line",{x1:1225,x2:1285,y1:228,y2:228,stroke:C.orange,"stroke-width":5},L); txt(1300,228,"this sample's OLS line",{s:19,a:"start",f:C.dark},L);
+  txt(1225,290,"error  u",{s:24,w:700,a:"start",f:C.blue},L); txt(1540,290,"+17.0",{s:26,w:700,a:"end",f:C.blue},L);
+  txt(1225,330,"never seen, never changes",{s:16,a:"start",f:C.ink},L);
+  txt(1225,392,"residual  û",{s:24,w:700,a:"start",f:C.orange},L); A.uhTxt=txt(1540,392,"",{s:26,w:700,a:"end",f:C.orange},L);
+  txt(1225,432,"computed, changes every sample",{s:16,a:"start",f:C.ink},L);
+  A.cnt=txt(1380,520,"",{s:19,f:C.ink});
+  // a pool of 24 points that glide from one sample to the next
+  A.pts=[]; for(let i=0;i<24;i++){ const c=el("circle",{r:7,fill:C.soft,opacity:0},A.ptsG); A.pts.push({c,x:P.sx(8),y:P.sy(50),tx:P.sx(8),ty:P.sy(50),op:0}); }
+  A.rnd=mul(1010); A.k=0; A.playing=true; A.last=-1e9; A.cur=null; A.tgt=null; A.lineOp=0;
+  caption("Same observation, same error. Each new sample moves the orange line, so the residual changes.",C.blue);
+}
+function drawSampleA(){
+  const P=A.P, xs=[A.HX], ys=[A.hy];
+  for(let i=0;i<24;i++){ const x=0.6+A.rnd()*14.8, y=A.B0+A.B1*x+gauss(A.rnd)*A.SIG; xs.push(x); ys.push(y); A.pts[i].tx=P.sx(x); A.pts[i].ty=P.sy(y); }
+  const f=ols(xs,ys); A.tgt={b0:f.b0,b1:f.b1}; if(!A.cur) A.cur={b0:f.b0,b1:f.b1};
+  A.k++; A.cnt.textContent="sample "+A.k+" (25 observations each)";
+}
+function stepA(now,dt){
+  if(A.playing && now-A.last>2800){ A.last=now; drawSampleA(); }
+  const kp=ez(dt,260), kl=ez(dt,340);
+  for(const p of A.pts){ p.x=toward(p.x,p.tx,kp); p.y=toward(p.y,p.ty,kp); p.op=toward(p.op,A.k?0.75:0,kp);
+    p.c.setAttribute("cx",p.x.toFixed(1)); p.c.setAttribute("cy",p.y.toFixed(1)); p.c.setAttribute("opacity",p.op.toFixed(3)); }
+  if(A.cur && A.tgt){
+    A.cur.b0=toward(A.cur.b0,A.tgt.b0,kl); A.cur.b1=toward(A.cur.b1,A.tgt.b1,kl);
+    A.lineOp=toward(A.lineOp,1,kl); A.fit.setAttribute("opacity",A.lineOp.toFixed(3));
+    setLine(A.fit,lineEnds(A.P,A.cur.b0,A.cur.b1));
+    const fitY=A.cur.b0+A.cur.b1*A.HX;
+    A.uhSeg.setAttribute("y2",A.P.sy(fitY).toFixed(1)); A.uhTxt.textContent=fmt(A.hy-fitY,1);
+  }
+}
+
+/* =====================================================================
+   SCENE 2: many samples of real plays, one bell
+   ===================================================================== */
+const B={};
+const BN=[25,50,200,800];
+const CUM=(()=>{let s=0; return CELLS.map(c=>(s+=c[2]));})(), TOT=CUM[CUM.length-1];
+function drawCell(r){ const u=r()*TOT; let lo=0,hi=CUM.length-1; while(lo<hi){const m=(lo+hi)>>1; if(CUM[m]>u) hi=m; else lo=m+1;} return CELLS[lo]; }
+function startB(){
+  clear(); fades=[]; captionEl=null;
+  header("Draw plays at random, fit the line, keep the slope. Repeat.","Animation 2 of 3");
+  B.P=plotArea(170,760,150,690,0.5,15.5,0,1); const P=B.P;
+  axes(P,[1,3,5,7,9,11,13,15],[0,0.25,0.5,0.75,1],"yards to go","share of the sample that converted",null,v=>Math.round(v*100)+"%");
+  B.clip=clipTo(P);
+  el("line",{...lineEnds(P,BALL.b0,BALL.b1),stroke:C.blue,"stroke-width":4,"stroke-dasharray":"12 9"},B.clip);
+  txt(P.sx(1.2),P.y0+22,"dashed line: all 20,014 plays",{s:17,f:C.blue,a:"start",w:600});
+  B.ghostG=el("g",{},B.clip); B.dotG=el("g",{},B.clip); B.fit=el("line",{stroke:C.orange,"stroke-width":5,opacity:0},B.clip);
+  // one dot per distance; each glides to its new share and size
+  B.dots=[]; for(let d=1;d<=15;d++){ const c=el("circle",{cx:P.sx(d),cy:P.sy(0.5),r:0,fill:C.orange,opacity:0.38},B.dotG); B.dots.push({c,y:P.sy(0.5),ty:P.sy(0.5),r:0,tr:0}); }
+  // histogram of slopes, in percentage points
+  B.H=plotArea(930,1540,330,690,-14,6,0,1);
+  B.bw=0.25; B.nb=Math.round((B.H.xmax-B.H.xmin)/B.bw);
+  for(const v of [-12,-8,-4,0,4]){el("line",{x1:B.H.sx(v),x2:B.H.sx(v),y1:B.H.y0,y2:B.H.y1,stroke:C.grid,"stroke-width":2});txt(B.H.sx(v),B.H.y1+24,fmtU(v,0),{s:17});}
+  el("line",{x1:B.H.x0,x2:B.H.x1,y1:B.H.y1,y2:B.H.y1,stroke:C.pale,"stroke-width":2});
+  txt((B.H.x0+B.H.x1)/2,B.H.y1+56,"slope of each sample's line (points per yard)",{s:20,f:C.dark});
+  B.bars=[]; B.hcur=new Float64Array(B.nb);
+  for(let j=0;j<B.nb;j++){ B.bars.push(el("rect",{x:B.H.sx(B.H.xmin+j*B.bw)+1,width:B.H.sx(B.H.xmin+B.bw)-B.H.sx(B.H.xmin)-2,y:B.H.y1,height:0,fill:C.soft})); }
+  el("line",{x1:B.H.sx(BALL.b1*100),x2:B.H.sx(BALL.b1*100),y1:B.H.y0+20,y2:B.H.y1,stroke:C.blue,"stroke-width":3,"stroke-dasharray":"10 8"});
+  txt(B.H.sx(BALL.b1*100),B.H.y0+6,"all plays: −4.2",{s:17,f:C.blue,w:600});
+  B.fla=el("g",{opacity:0}); el("line",{x1:B.H.sx(FLA.b1*100),x2:B.H.sx(FLA.b1*100),y1:B.H.y1+2,y2:B.H.y0+46,stroke:C.orange,"stroke-width":3},B.fla);
+  txt(B.H.sx(FLA.b1*100)+10,B.H.y0+46,"Florida's 62 plays: −3.8",{s:17,f:C.orange,w:700,a:"start"},B.fla);
+  B.dropG=el("g",{}); B.drops=[];
+  const R=el("g",{}); el("rect",{x:930,y:120,width:610,height:150,rx:12,fill:"#FFFFFF",stroke:C.pale},R);
+  B.r1=txt(955,152,"",{s:19,a:"start",f:C.ink},R); B.r2=txt(955,186,"",{s:19,a:"start",f:C.dark,w:600},R);
+  B.r3=txt(955,220,"",{s:21,a:"start",f:C.orange,w:700},R); B.r4=txt(955,252,"",{s:17,a:"start",f:C.ink},R);
+  B.setBtn=pills(790,560,BN.map(n=>n+" plays"),"plays per sample",j=>setNB(j),130);
+  B.rnd=mul(4421); B.playing=true; B.last=0; B.speed=700; B.scale=40; B.fitOp=0; B.cur=null; B.tgt=null;
+  setNB(0);
+}
+function setNB(j){
+  B.k=Math.max(0,Math.min(BN.length-1,j)); B.n=BN[B.k]; B.setBtn(B.k);
+  B.slopes=[]; B.cnt=new Int32Array(B.nb);
+  for(const g of B.ghosts||[]) g.e.remove(); B.ghosts=[];
+  for(const d of B.drops||[]) d.c.remove(); B.drops=[];
+  fadeTo(B.fla,B.n===50?1:0,500);
+  const msg={25:"Tiny samples: the slopes are all over the place.",50:"About one team's season of plays. Florida's slope sits well inside the bell.",
+             200:"Four times the plays of 50: the bell is half as wide.",800:"Sixteen times the plays of 50: a quarter of the width."}[B.n];
+  caption(msg,B.n>=200?C.orange:C.blue);
+}
+function drawSampleB(withDrop){
+  const P=B.P, cnt=new Array(16).fill(0), conv=new Array(16).fill(0), xs=new Array(B.n), ys=new Array(B.n);
+  for(let i=0;i<B.n;i++){ const c=drawCell(B.rnd); xs[i]=c[0]; ys[i]=c[1]; cnt[c[0]]++; conv[c[0]]+=c[1]; }
+  let ok=false; for(let i=1;i<B.n;i++) if(xs[i]!==xs[0]){ok=true;break;} if(!ok) return;
+  const f=ols(xs,ys);
+  const rmax=B.n<=50?16:B.n<=200?12:10;
+  for(let d=1;d<=15;d++){ const o=B.dots[d-1];
+    if(cnt[d]){ o.ty=P.sy(conv[d]/cnt[d]); o.tr=Math.min(26,Math.max(4,rmax*Math.sqrt(cnt[d]/(B.n/6)))); } else o.tr=0; }
+  // the previous line stays behind as a fading ghost
+  if(B.tgt){ const g=el("line",{...lineEnds(P,B.tgt.b0,B.tgt.b1),stroke:C.orange,"stroke-width":2,opacity:0.28},B.ghostG); B.ghosts.push({e:g,op:0.28}); if(B.ghosts.length>40) B.ghosts.shift().e.remove(); }
+  B.tgt={b0:f.b0,b1:f.b1}; if(!B.cur) B.cur={b0:f.b0,b1:f.b1};
+  const s=f.b1*100; B.slopes.push(s);
+  const j=Math.floor((s-B.H.xmin)/B.bw);
+  if(j>=0&&j<B.nb){
+    if(withDrop && B.drops.length<14 && !CALM){ const x=B.H.sx(B.H.xmin+(j+0.5)*B.bw); const c=el("circle",{cx:x,cy:B.H.y0-10,r:7,fill:C.orange},B.dropG); B.drops.push({c,j,y:B.H.y0-10,v:0}); }
+    else B.cnt[j]++;
+  }
+}
+function stepB(now,dt){
+  if(B.playing && now-B.last>B.speed){ B.last=now; const reps=B.speed<40?6:B.speed<120?2:1; for(let r=0;r<reps;r++) drawSampleB(B.speed>=120); }
+  const P=B.P, tau=Math.min(260,B.speed*0.45), k=ez(dt,tau);
+  for(let d=1;d<=15;d++){ const o=B.dots[d-1]; o.y=toward(o.y,o.ty,k); o.r=toward(o.r,o.tr,k);
+    o.c.setAttribute("cy",o.y.toFixed(1)); o.c.setAttribute("r",Math.max(0,o.r).toFixed(1)); }
+  if(B.cur&&B.tgt){ B.cur.b0=toward(B.cur.b0,B.tgt.b0,k); B.cur.b1=toward(B.cur.b1,B.tgt.b1,k); setLine(B.fit,lineEnds(P,B.cur.b0,B.cur.b1));
+    B.fitOp=toward(B.fitOp,1,k); B.fit.setAttribute("opacity",B.fitOp.toFixed(3)); }
+  const decay=Math.exp(-dt/Math.max(600,B.speed*4));
+  B.ghosts=B.ghosts.filter(g=>{ g.op*=decay; if(g.op<0.02){g.e.remove(); return false;} g.e.setAttribute("opacity",g.op.toFixed(3)); return true; });
+  // falling slopes land in their bin
+  B.drops=B.drops.filter(o=>{ o.v+=dt*0.0028; o.y+=o.v*dt; const land=B.H.y1-B.hcur[o.j]*B.scale-6;
+    if(o.y>=land){ B.cnt[o.j]++; o.c.remove(); return false; } o.c.setAttribute("cy",o.y.toFixed(1)); return true; });
+  let mx=1; for(let j=0;j<B.nb;j++) mx=Math.max(mx,B.cnt[j]);
+  B.scale=toward(B.scale,(B.H.y1-B.H.y0-60)/Math.max(mx,8),ez(dt,400));
+  const kb=ez(dt,160);
+  for(let j=0;j<B.nb;j++){ B.hcur[j]=toward(B.hcur[j],B.cnt[j],kb); const h=B.hcur[j]*B.scale; B.bars[j].setAttribute("y",(B.H.y1-h).toFixed(1)); B.bars[j].setAttribute("height",Math.max(0,h).toFixed(1)); }
+  const n=B.slopes.length;
+  B.r1.textContent="samples drawn: "+n.toLocaleString();
+  B.r2.textContent="average slope: "+(n?fmtU(mean(B.slopes),2):"–");
+  B.r3.textContent="spread of the slopes (SD): "+(n>2?sd(B.slopes).toFixed(2):"–");
+  B.r4.textContent="formula: 0.468 / (√"+B.n+" × 3.76) × 100 = "+(100*BALL.su/(Math.sqrt(B.n)*BALL.sx)).toFixed(2);
+}
+
+/* =====================================================================
+   SCENE 3: the three parts of SE(b1)
+   ===================================================================== */
+const D={};
+const DN=[10,25,50,100,400], DS=[3,6,12,20,30], DX=[0.6,1.2,2.4,3.6,4.8];
+function startD(){
+  clear(); fades=[]; captionEl=null;
+  header("What makes a slope precise: data, noise, spread in X","Animation 3 of 3");
+  D.P=plotArea(170,1040,140,640,0,20,0,140); const P=D.P;
+  axes(P,[0,5,10,15,20],[0,35,70,105,140],"X","Y");
+  D.clip=clipTo(P); D.B0=40; D.B1=3;
+  D.fanG=el("g",{},D.clip); D.ptsG=el("g",{},D.clip);
+  el("line",{...lineEnds(P,D.B0,D.B1),stroke:C.blue,"stroke-width":4,"stroke-dasharray":"12 9"},D.clip);
+  const F=el("g",{}); el("rect",{x:1110,y:150,width:450,height:330,rx:14,fill:"#FFFFFF",stroke:C.pale},F);
+  txt(1335,190,"SE(b₁) ≈ noise ÷ (√n × spread in X)",{s:21,w:600,f:C.dark},F);
+  D.fN=txt(1140,250,"",{s:20,a:"start",f:C.dark},F); D.fS=txt(1140,290,"",{s:20,a:"start",f:C.dark},F); D.fX=txt(1140,330,"",{s:20,a:"start",f:C.dark},F);
+  D.fSE=txt(1140,392,"",{s:26,a:"start",f:C.orange,w:700},F); D.fObs=txt(1140,440,"",{s:17,a:"start",f:C.ink},F);
+  txt(1335,520,"blue dashed: the population line",{s:17,f:C.blue});
+  txt(1335,548,"orange: lines from 25 different samples",{s:17,f:C.orange});
+  D.i=[1,2,2];
+  D.setN=pills(720,330,DN.map(v=>"n = "+v),"more data",j=>{D.i[0]=j;resetD("n");},120);
+  D.setS=pills(772,330,["tiny","small","medium","large","huge"],"noise around the line",j=>{D.i[1]=j;resetD("s");},120);
+  D.setX=pills(824,330,["very narrow","narrow","medium","wide","very wide"],"spread in X",j=>{D.i[2]=j;resetD("x");},120);
+  // 25 persistent lines and a pool of points, all gliding
+  D.lines=[]; for(let k=0;k<25;k++){ const e=el("line",{stroke:C.orange,"stroke-width":2.5,opacity:0.35},D.fanG); D.lines.push({e,b0:D.B0,b1:D.B1,t0:D.B0,t1:D.B1}); }
+  D.pts=[]; for(let k=0;k<400;k++){ const c=el("circle",{r:5,fill:C.soft,opacity:0},D.ptsG); D.pts.push({c,x:P.sx(10),y:P.sy(70),tx:P.sx(10),ty:P.sy(70),op:0,top:0}); }
+  D.rnd=mul(77); D.playing=true; D.last=0; D.rr=0; D.seDisp=null;
+  resetD("start");
+}
+function sampleD(){ const n=DN[D.i[0]], s=DS[D.i[1]], sx=DX[D.i[2]], xs=[], ys=[];
+  for(let k=0;k<n;k++){ const x=10+(D.rnd()-0.5)*sx*Math.sqrt(12); xs.push(x); ys.push(D.B0+D.B1*x+gauss(D.rnd)*s); }
+  return {xs,ys,f:ols(xs,ys)}; }
+function showPtsD(S){ const P=D.P;
+  for(let k=0;k<D.pts.length;k++){ const p=D.pts[k];
+    if(k<S.xs.length){ p.tx=P.sx(S.xs[k]); p.ty=P.sy(S.ys[k]); p.top=0.6; } else p.top=0; } }
+function resetD(which){
+  D.setN(D.i[0]); D.setS(D.i[1]); D.setX(D.i[2]);
+  let S=null; for(const L of D.lines){ S=sampleD(); L.t0=S.f.b0; L.t1=S.f.b1; }
+  showPtsD(S);
+  const n=DN[D.i[0]], s=DS[D.i[1]], sx=DX[D.i[2]];
+  D.fN.textContent="observations, n: "+n; D.fS.textContent="noise around the line: "+s; D.fX.textContent="spread in X: "+sx.toFixed(1);
+  D.seT=s/(Math.sqrt(n)*sx); if(D.seDisp===null) D.seDisp=D.seT;
+  const msgs={n:"More observations: the lines close in on the population line.",s:"Less noise around the line: every sample tells a similar story.",x:"Wider spread in X: small wobbles barely tip the line.",start:"Click the buttons. Each part changes how much the lines disagree."};
+  caption(msgs[which]||msgs.start,C.blue); D.last=performance.now();
+}
+function stepD(now,dt){
+  if(D.playing && now-D.last>700){ D.last=now; const S=sampleD(), L=D.lines[D.rr]; L.t0=S.f.b0; L.t1=S.f.b1; D.rr=(D.rr+1)%D.lines.length; showPtsD(S); }
+  const kl=ez(dt,420), kp=ez(dt,320);
+  for(const L of D.lines){ L.b0=toward(L.b0,L.t0,kl); L.b1=toward(L.b1,L.t1,kl); setLine(L.e,lineEnds(D.P,L.b0,L.b1)); }
+  for(const p of D.pts){ p.x=toward(p.x,p.tx,kp); p.y=toward(p.y,p.ty,kp); p.op=toward(p.op,p.top,kp);
+    if(p.op<0.005 && p.top===0){ if(p.c.getAttribute("opacity")!=="0") p.c.setAttribute("opacity","0"); continue; }
+    p.c.setAttribute("cx",p.x.toFixed(1)); p.c.setAttribute("cy",p.y.toFixed(1)); p.c.setAttribute("opacity",p.op.toFixed(3)); }
+  D.seDisp=toward(D.seDisp,D.seT,ez(dt,300)); D.fSE.textContent="SE(b₁) ≈ "+D.seDisp.toFixed(2);
+  D.fObs.textContent="actual spread of the 25 slopes: "+sd(D.lines.map(L=>L.t1)).toFixed(2);
+}
+
+/* =====================================================================
+   driver
+   ===================================================================== */
+const SC=[{start:startA,step:stepA,obj:A},{start:startB,step:stepB,obj:B},{start:startD,step:stepD,obj:D}];
+let cur=0;
+function go(i){cur=(i+SC.length)%SC.length; history.replaceState(null,"","#"+(cur+1)); SC[cur].start();}
+addEventListener("keydown",e=>{
+  if(e.key==="ArrowRight"||e.key==="PageDown") go(cur+1);
+  else if(e.key==="ArrowLeft"||e.key==="PageUp") go(cur-1);
+  else if(e.key===" "){ e.preventDefault(); SC[cur].obj.playing=!SC[cur].obj.playing; }
+  else if(e.key==="r"||e.key==="R") go(cur);
+  else if(e.key==="+"||e.key==="="){ if(cur===1) B.speed=Math.max(15,Math.round(B.speed/2)); }
+  else if(e.key==="-"||e.key==="_"){ if(cur===1) B.speed=Math.min(1800,Math.round(B.speed*2)); }
+  else if(e.key==="f"||e.key==="F") { document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen(); }
+});
+go(Math.max(0,Math.min(SC.length-1,(parseInt(location.hash.slice(1))||1)-1)));
+let lastT=performance.now();
+(function frame(now){ const dt=Math.min(100,Math.max(0,now-lastT)); lastT=now; SC[cur].step(now,dt); tickFades(now); requestAnimationFrame(frame); })(performance.now());
+</script>
+</body>
+</html>

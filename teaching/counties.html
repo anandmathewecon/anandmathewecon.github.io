@@ -1,0 +1,499 @@
+<meta charset="utf-8">
+<title>Three Thousand Counties</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F5F7FA;
+  --panel:#EDF1F6;
+  --ink:#121A2B;
+  --muted:#65758C;
+  --line:#D6DEE9;
+  --blue:#0021A5;
+  --blue-soft:#5B7BD5;
+  --orange:#FA4616;
+  --orange-soft:#FF8E63;
+  --dot-dim:#C3CCDA;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1220; --panel:#141B2C; --ink:#EAF0FA; --muted:#93A3BC;
+    --line:#26314A; --blue:#7C9BFF; --blue-soft:#4E6BC4; --orange:#FF6A3D;
+    --orange-soft:#FFA07A; --dot-dim:#2E3A52;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1220; --panel:#141B2C; --ink:#EAF0FA; --muted:#93A3BC;
+  --line:#26314A; --blue:#7C9BFF; --blue-soft:#4E6BC4; --orange:#FF6A3D;
+  --orange-soft:#FFA07A; --dot-dim:#2E3A52;
+}
+
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  min-height:100vh; display:flex; flex-direction:column;
+  overflow:hidden;
+}
+#stage{flex:1; display:flex; flex-direction:column; padding:2.2vh 2.4vw 0; gap:1.2vh; min-height:0;}
+
+header{display:flex; align-items:baseline; justify-content:space-between; gap:1.5rem; flex-wrap:wrap;}
+h1{
+  font-family:Fraunces,Georgia,serif; font-weight:600;
+  font-size:clamp(1.5rem,3.1vw,2.9rem); margin:0; line-height:1.06;
+  text-wrap:balance; letter-spacing:-0.015em;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:clamp(.65rem,1.05vw,.9rem);
+  text-transform:uppercase; letter-spacing:.16em; color:var(--muted);
+  white-space:nowrap;
+}
+#sub{
+  font-size:clamp(.95rem,1.55vw,1.4rem); color:var(--muted);
+  margin:0; max-width:78ch; line-height:1.4; min-height:2.9em;
+}
+#sub b{color:var(--ink); font-weight:600;}
+#sub .o{color:var(--orange); font-weight:600;}
+#sub .b{color:var(--blue); font-weight:600;}
+
+#canvasWrap{flex:1; position:relative; min-height:0;}
+canvas{position:absolute; inset:0; width:100%; height:100%;}
+
+/* live numeric readouts */
+#readout{
+  display:flex; gap:clamp(1rem,3vw,3.2rem); flex-wrap:wrap;
+  padding:1.1vh 0 1.6vh; min-height:8.4vh; align-items:flex-end;
+}
+.stat{display:flex; flex-direction:column; gap:.18em; opacity:0; transition:opacity .45s ease;}
+.stat.on{opacity:1;}
+.stat .k{
+  font-family:"IBM Plex Mono",monospace; font-size:clamp(.6rem,.95vw,.8rem);
+  text-transform:uppercase; letter-spacing:.14em; color:var(--muted);
+}
+.stat .v{
+  font-family:"IBM Plex Mono",monospace; font-weight:600;
+  font-size:clamp(1.15rem,2.5vw,2.2rem); font-variant-numeric:tabular-nums;
+  line-height:1;
+}
+.v.blue{color:var(--blue);} .v.orange{color:var(--orange);}
+
+footer{
+  display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:.9vh 2.4vw 1.3vh; border-top:1px solid var(--line);
+}
+#rail{display:flex; gap:.45rem;}
+#rail i{
+  width:clamp(16px,2.1vw,30px); height:4px; border-radius:2px;
+  background:var(--line); transition:background .3s ease;
+}
+#rail i.done{background:var(--blue-soft);}
+#rail i.now{background:var(--orange);}
+.hint{
+  font-family:"IBM Plex Mono",monospace; color:var(--muted);
+  font-size:clamp(.62rem,.95vw,.82rem); letter-spacing:.05em;
+}
+kbd{
+  font-family:"IBM Plex Mono",monospace; background:var(--panel);
+  border:1px solid var(--line); border-radius:4px; padding:.1em .4em;
+  font-size:.95em; color:var(--ink);
+}
+button{
+  font:inherit; font-size:clamp(.72rem,1.1vw,.92rem); cursor:pointer;
+  background:var(--panel); color:var(--ink); border:1px solid var(--line);
+  border-radius:6px; padding:.45em 1em;
+}
+button:hover{border-color:var(--blue-soft);}
+button:focus-visible{outline:2.5px solid var(--orange); outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
+</style>
+
+<div id="stage">
+  <header>
+<meta charset="utf-8">
+    <h1 id="title">Three Thousand Counties</h1>
+    <span class="eyebrow" id="counter">01 / 10</span>
+  </header>
+  <p id="sub">Press <kbd>&rarr;</kbd> to begin.</p>
+  <div id="canvasWrap"><canvas id="c"></canvas></div>
+  <div id="readout">
+    <div class="stat" id="s1"><span class="k"></span><span class="v"></span></div>
+    <div class="stat" id="s2"><span class="k"></span><span class="v"></span></div>
+    <div class="stat" id="s3"><span class="k"></span><span class="v"></span></div>
+    <div class="stat" id="s4"><span class="k"></span><span class="v"></span></div>
+  </div>
+</div>
+<footer>
+  <div id="rail"></div>
+  <span class="hint"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> move &nbsp;·&nbsp; <kbd>R</kbd> replay &nbsp;·&nbsp; <kbd>D</kbd> draw again</span>
+  <button id="next">Next &rarr;</button>
+</footer>
+
+<script>
+"use strict";
+
+/* ---------- seeded RNG so the lecture is identical every single time ---- */
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+/* ---------- simplified lower-48 outline, 1000 x 620 ------------------- */
+const US=[[58,62],[300,58],[520,55],[600,54],[612,60],[640,78],[668,92],[700,86],
+[716,70],[740,92],[752,120],[742,150],[756,178],[776,168],[790,140],[806,124],
+[830,118],[858,108],[886,96],[912,84],[936,70],
+[952,92],[938,118],[922,142],[906,166],[886,182],[868,200],[852,220],[846,244],
+[834,258],[844,278],[852,300],[840,322],[826,342],[810,360],[796,380],[790,398],
+[784,420],[776,448],[768,472],[752,452],[748,424],[744,400],[730,392],[706,388],
+[684,392],[662,384],[640,392],[618,382],[600,392],[580,386],[556,392],[534,402],
+[512,418],[494,436],[480,452],[462,438],[448,416],[436,392],[422,368],[404,348],
+[388,332],[372,342],[356,330],[340,312],[322,306],[296,304],[268,302],[240,300],
+[212,298],[186,296],[160,294],[140,278],[122,258],[108,236],[92,212],[74,186],
+[58,158],[46,132],[38,108],[44,86]];
+
+function inside(x,y){
+  let hit=false;
+  for(let i=0,j=US.length-1;i<US.length;j=i++){
+    const xi=US[i][0],yi=US[i][1],xj=US[j][0],yj=US[j][1];
+    if((yi>y)!==(yj>y) && x < (xj-xi)*(y-yi)/(yj-yi)+xi) hit=!hit;
+  }
+  return hit;
+}
+
+/* ---------- build the population -------------------------------------- */
+const N=3144, rng=mulberry(4421);
+const counties=[];
+while(counties.length<N){
+  const x=20+rng()*940, y=45+rng()*440;
+  if(!inside(x,y)) continue;
+  // urbanicity: higher near the coasts and the northeast corridor
+  const coastW=Math.max(0,1-Math.abs(x-95)/190);
+  const coastE=Math.max(0,1-Math.abs(x-880)/210)*Math.max(0,1-Math.abs(y-210)/300);
+  const lakes =Math.max(0,1-Math.hypot(x-770,y-160)/230)*0.7;
+  const u=Math.min(1,coastW*0.9+coastE*1.0+lakes+rng()*0.55);
+  const metro=u>0.62?1:0;
+  const base=metro?71000:56000, sd=metro?18000:13000;
+  // lognormal, matched to that mean and SD -> the right-skew of real income
+  const s=Math.sqrt(Math.log(1+(sd/base)**2)), m=Math.log(base)-s*s/2;
+  counties.push({x,y,metro,inc:Math.exp(m+s*gauss(rng)),t:rng()});
+}
+const inc=counties.map(d=>d.inc);
+const MU=inc.reduce((a,b)=>a+b,0)/N;
+const SIG=Math.sqrt(inc.reduce((a,b)=>a+(b-MU)**2,0)/N);
+const metroArr=counties.filter(d=>d.metro), nonArr=counties.filter(d=>!d.metro);
+const MU_M=metroArr.reduce((a,d)=>a+d.inc,0)/metroArr.length;
+const MU_N=nonArr.reduce((a,d)=>a+d.inc,0)/nonArr.length;
+
+/* income -> 0..1 position on the distribution axis */
+const LO=20000, HI=130000;
+const pos=v=>Math.max(0,Math.min(1,(v-LO)/(HI-LO)));
+const BINS=44, hist=new Array(BINS).fill(0);
+counties.forEach(d=>{hist[Math.min(BINS-1,Math.floor(pos(d.inc)*BINS))]++;});
+const histMax=Math.max(...hist);
+const histM=new Array(BINS).fill(0), histN=new Array(BINS).fill(0);
+counties.forEach(d=>{const b=Math.min(BINS-1,Math.floor(pos(d.inc)*BINS));(d.metro?histM:histN)[b]++;});
+
+const money=v=>"$"+Math.round(v).toLocaleString("en-US");
+
+/* ---------- sampling state -------------------------------------------- */
+let sampleN=40, sampleIdx=[], sampleMean=0, tally=[], drawSeed=7;
+function drawSample(){
+  const r=mulberry(drawSeed++); sampleIdx=[];
+  const used=new Set();
+  while(sampleIdx.length<sampleN){
+    const k=Math.floor(r()*N);
+    if(!used.has(k)){used.add(k);sampleIdx.push(k);}
+  }
+  sampleMean=sampleIdx.reduce((a,k)=>a+counties[k].inc,0)/sampleN;
+  tally.push(sampleMean);
+  if(tally.length>420) tally.shift();
+}
+
+/* ---------- canvas ----------------------------------------------------- */
+const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+let W=0,H=0,DPR=1;
+function resize(){
+  const r=cv.getBoundingClientRect(); DPR=Math.min(2,devicePixelRatio||1);
+  cv.width=r.width*DPR; cv.height=r.height*DPR; W=r.width; H=r.height;
+}
+addEventListener("resize",()=>{resize();render();});
+
+const css=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+
+/* Canvas fillStyle does not reliably parse color-mix(), so blend by hand. */
+function hex2rgb(h){
+  h=h.replace("#","");
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+function mix(a,b,t){            // t=0 -> a, t=1 -> b
+  const A=hex2rgb(a),B=hex2rgb(b);
+  return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`;
+}
+
+/* map occupies the top ~62%, distribution strip the bottom */
+function layout(){
+  const mapH=H*0.60, s=Math.min(W/1000,mapH/500)*0.97;
+  return {s, ox:(W-1000*s)/2, oy:H*0.015, distY:H*0.74, distH:H*0.20,
+          axY:H*0.955, axX0:W*0.09, axW:W*0.82};
+}
+
+function dotColor(d,sc){
+  if(sc.dim) return css("--dot-dim");
+  if(sc.split) return d.metro?css("--orange"):css("--blue-soft");
+  if(sc.shade){
+    const t=Math.max(0,Math.min(1,(pos(d.inc)-0.05)/0.55));
+    return mix(css("--ground"),css("--blue"),0.16+0.80*t);
+  }
+  return css("--blue-soft");
+}
+
+let anim=0; // 0..1 progress within the current scene
+
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,H);
+  const L=layout(), sc=SCENES[cur], e=easeOut(anim);
+
+  /* ---- dots ---- */
+  const R=Math.max(1.15,L.s*1.9);
+  counties.forEach((d,i)=>{
+    if(sc.reveal && d.t>e) return;
+    const X=L.ox+d.x*L.s, Y=L.oy+d.y*L.s;
+    ctx.beginPath(); ctx.arc(X,Y,R,0,7); ctx.fillStyle=dotColor(d,sc); ctx.fill();
+  });
+  if(sc.sample){
+    const R2=Math.max(2.4,L.s*3.4);
+    sampleIdx.forEach(k=>{
+      const d=counties[k], X=L.ox+d.x*L.s, Y=L.oy+d.y*L.s;
+      ctx.beginPath(); ctx.arc(X,Y,R2,0,7); ctx.fillStyle=css("--orange"); ctx.fill();
+      ctx.lineWidth=1.4; ctx.strokeStyle=css("--ground"); ctx.stroke();
+    });
+  }
+
+  /* ---- distribution strip ---- */
+  if(sc.dist){
+    const bw=L.axW/BINS;
+    for(let b=0;b<BINS;b++){
+      const x=L.axX0+b*bw;
+      if(sc.split){
+        const hN=(histN[b]/histMax)*L.distH*e, hM=(histM[b]/histMax)*L.distH*e;
+        ctx.fillStyle=css("--blue-soft"); ctx.fillRect(x+1,L.axY-hN,bw-2,hN);
+        ctx.fillStyle=css("--orange");    ctx.fillRect(x+1,L.axY-hN-hM,bw-2,hM);
+      }else{
+        const h=(hist[b]/histMax)*L.distH*(sc.reveal?e:1);
+        ctx.fillStyle=sc.dim?css("--dot-dim"):css("--blue-soft");
+        ctx.fillRect(x+1,L.axY-h,bw-2,h);
+      }
+    }
+    ctx.strokeStyle=css("--line"); ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(L.axX0,L.axY+.5); ctx.lineTo(L.axX0+L.axW,L.axY+.5); ctx.stroke();
+    ctx.fillStyle=css("--muted");
+    ctx.font=`${Math.max(10,W*0.0092)}px "IBM Plex Mono", monospace`;
+    ctx.textAlign="center";
+    [30,50,70,90,110].forEach(k=>{
+      const x=L.axX0+pos(k*1000)*L.axW;
+      ctx.fillText("$"+k+"k",x,L.axY+Math.max(14,H*0.028));
+    });
+  }
+
+  const atX=v=>L.axX0+pos(v)*L.axW;
+
+  /* ---- SD band ---- */
+  if(sc.sd){
+    const a=atX(MU-SIG), b=atX(MU+SIG), w=(b-a)*e, cx=atX(MU);
+    ctx.fillStyle=css("--orange"); ctx.globalAlpha=0.12;
+    ctx.fillRect(cx-w/2,L.axY-L.distH,w,L.distH); ctx.globalAlpha=1;
+    ctx.strokeStyle=css("--orange"); ctx.lineWidth=2;
+    const yb=L.axY-L.distH-Math.max(8,H*0.018);
+    ctx.beginPath(); ctx.moveTo(cx-w/2,yb); ctx.lineTo(cx+w/2,yb);
+    ctx.moveTo(cx-w/2,yb-6); ctx.lineTo(cx-w/2,yb+6);
+    ctx.moveTo(cx+w/2,yb-6); ctx.lineTo(cx+w/2,yb+6); ctx.stroke();
+  }
+
+  /* ---- fulcrums ---- */
+  const fulcrum=(v,color,label,lift)=>{
+    const x=atX(v), y=L.axY;
+    ctx.strokeStyle=color; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y-L.distH*1.06); ctx.stroke();
+    ctx.fillStyle=color; ctx.beginPath();
+    const t=Math.max(7,H*0.014);
+    ctx.moveTo(x,y+1); ctx.lineTo(x-t,y+t*1.5); ctx.lineTo(x+t,y+t*1.5); ctx.closePath(); ctx.fill();
+    ctx.font=`600 ${Math.max(12,W*0.0125)}px "IBM Plex Mono", monospace`;
+    ctx.textAlign="center";
+    ctx.fillText(label,x,y-L.distH*1.06-(lift||Math.max(8,H*0.016)));
+  };
+  if(sc.mean)  fulcrum(MU,   css("--orange"), money(MU));
+  if(sc.split){fulcrum(MU_N, css("--blue"),  money(MU_N));
+               fulcrum(MU_M, css("--orange"),money(MU_M));}
+
+  /* ---- the gap ---- */
+  if(sc.gap){
+    const a=atX(MU_N), b=atX(MU_M), y=L.axY-L.distH*1.42;
+    ctx.strokeStyle=css("--ink"); ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.moveTo(a,y); ctx.lineTo(a+(b-a)*e,y); ctx.stroke();
+    [[a,1],[b,-1]].forEach(([x,dir],i)=>{ if(i&&e<0.98)return;
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+dir*9,y-6); ctx.lineTo(x+dir*9,y+6);
+      ctx.closePath(); ctx.fillStyle=css("--ink"); ctx.fill();});
+    if(e>0.55){
+      ctx.fillStyle=css("--ink"); ctx.textAlign="center";
+      ctx.font=`600 ${Math.max(13,W*0.0145)}px "IBM Plex Sans", sans-serif`;
+      ctx.fillText(money(MU_M-MU_N)+" gap",(a+b)/2,y-Math.max(10,H*0.02));
+    }
+  }
+
+  /* ---- the truth line + the estimate + the tally ---- */
+  if(sc.sample){
+    const xt=atX(MU);
+    ctx.setLineDash([6,5]); ctx.strokeStyle=css("--blue"); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(xt,L.axY); ctx.lineTo(xt,L.axY-L.distH*1.3); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=css("--blue"); ctx.textAlign="center";
+    ctx.font=`600 ${Math.max(11,W*0.0115)}px "IBM Plex Mono", monospace`;
+    ctx.fillText("truth "+money(MU),xt,L.axY-L.distH*1.3-Math.max(7,H*0.014));
+
+    if(sc.tally && tally.length>1){
+      const tb=new Array(BINS).fill(0);
+      tally.forEach(v=>{tb[Math.min(BINS-1,Math.floor(pos(v)*BINS))]++;});
+      const tmax=Math.max(...tb), bw=L.axW/BINS;
+      for(let b=0;b<BINS;b++){
+        if(!tb[b])continue;
+        const h=(tb[b]/tmax)*L.distH*0.80;
+        ctx.fillStyle=css("--orange"); ctx.globalAlpha=0.30;
+        ctx.fillRect(L.axX0+b*bw+1,L.axY-h,bw-2,h); ctx.globalAlpha=1;
+      }
+    }
+    const xe=atX(sampleMean);
+    ctx.strokeStyle=css("--orange"); ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(xe,L.axY); ctx.lineTo(xe,L.axY-L.distH*1.02); ctx.stroke();
+    ctx.fillStyle=css("--orange");
+    ctx.font=`600 ${Math.max(13,W*0.0145)}px "IBM Plex Mono", monospace`;
+    ctx.fillText(money(sampleMean),xe,L.axY-L.distH*1.02-Math.max(8,H*0.016));
+  }
+}
+const easeOut=t=>1-Math.pow(1-t,3);
+
+/* ---------- scenes ----------------------------------------------------- */
+const SCENES=[
+{t:"Three Thousand Counties",
+ s:"Every county in the United States. One dot each. Nobody left out &mdash; this is a <b>population</b>.",
+ reveal:1, dur:2600, stats:[["counties","3,144",""]]},
+
+{t:"What Each Dot Is Worth",
+ s:"Now shade each dot by its <b>median household income</b>. Darker is richer. Stack all 3,144 values up and you get the distribution along the bottom.",
+ shade:1, dist:1, reveal:1, dur:1900,
+ stats:[["counties","3,144",""],["poorest",()=>money(Math.min(...inc)),""],["richest",()=>money(Math.max(...inc)),""]]},
+
+{t:"E[X] &mdash; the Balancing Point",
+ s:"Where does that picture balance? That single number is your <span class='o'>best guess</span> for a county you know nothing else about.",
+ shade:1, dist:1, mean:1, dur:1200,
+ stats:[["E[X]",()=>money(MU),"orange"]]},
+
+{t:"SD &mdash; How Far Off That Guess Usually Is",
+ s:"A typical county sits about this far from the average. The mean alone would never have told you the country was <b>this spread out</b>.",
+ shade:1, dist:1, mean:1, sd:1, dur:1500,
+ stats:[["E[X]",()=>money(MU),"orange"],["SD",()=>money(SIG),"orange"],
+        ["typical county",()=>money(MU-SIG)+" – "+money(MU+SIG),""]]},
+
+{t:"E[Y | X] &mdash; One Thing About the County",
+ s:"Split them: <span class='o'>metro</span> and <span class='b'>non-metro</span>. Two groups, two distributions, <b>two different best guesses</b>.",
+ split:1, dist:1, dur:1500,
+ stats:[["E[Y | non-metro]",()=>money(MU_N),"blue"],["E[Y | metro]",()=>money(MU_M),"orange"]]},
+
+{t:"Making the Comparison",
+ s:"The distance between two conditional averages. <b>Every question in this course has this shape</b> &mdash; a tariff, a training program, a year of schooling.",
+ split:1, dist:1, gap:1, dur:1500,
+ stats:[["E[Y | non-metro]",()=>money(MU_N),"blue"],["E[Y | metro]",()=>money(MU_M),"orange"],
+        ["difference",()=>money(MU_M-MU_N),""]]},
+
+{t:"Now Take the Country Away",
+ s:"Every number so far needed all 3,144 counties. <b>You will never have all 3,144.</b> You get the orange dots. Forty of them.",
+ dim:1, dist:1, sample:1, dur:900,
+ stats:[["you have","40 counties",""],["your estimate",()=>money(sampleMean),"orange"],
+        ["the truth",()=>money(MU),"blue"]]},
+
+{t:"Draw Again",
+ s:"Same country, same recipe, a different forty. Press <kbd>D</kbd> and watch the answer move &mdash; <b>not one county changed</b>.",
+ dim:1, dist:1, sample:1, tally:1, dur:600, redraw:1,
+ stats:[["draws so far",()=>tally.length,""],["this estimate",()=>money(sampleMean),"orange"],
+        ["the truth",()=>money(MU),"blue"]]},
+
+{t:"Your Estimate Is a Random Variable",
+ s:"Two hundred honest samples. They miss in both directions, but they pile up <b>centred on the truth</b>. That pile is the thing the rest of the semester is about.",
+ dim:1, dist:1, sample:1, tally:1, dur:2400, bulk:200,
+ stats:[["draws",()=>tally.length,""],["spread of estimates",()=>money(sd(tally)),"orange"],
+        ["σ / √n",()=>money(SIG/Math.sqrt(sampleN)),"blue"]]},
+
+{t:"Four Times the Data, Half the Error",
+ s:"Same experiment at <b>n = 40, then 160, then 640</b>. Press <kbd>D</kbd> to step up. The pile tightens by half each time &mdash; that is the <span class='o'>&radic;n rule</span>.",
+ dim:1, dist:1, sample:1, tally:1, dur:2000, grow:1,
+ stats:[["sample size",()=>sampleN,"orange"],["spread of estimates",()=>money(sd(tally)),"orange"],
+        ["σ / √n",()=>money(SIG/Math.sqrt(sampleN)),"blue"]]}
+];
+function sd(a){if(a.length<2)return 0;const m=a.reduce((x,y)=>x+y,0)/a.length;
+  return Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/(a.length-1));}
+
+/* ---------- driver ----------------------------------------------------- */
+let cur=0, t0=0, raf=0;
+const rail=document.getElementById("rail");
+SCENES.forEach(()=>rail.appendChild(document.createElement("i")));
+
+function bulkDraw(k){for(let i=0;i<k;i++)drawSample();}
+
+function paintChrome(){
+  const sc=SCENES[cur];
+  document.getElementById("title").innerHTML=sc.t;
+  document.getElementById("sub").innerHTML=sc.s;
+  document.getElementById("counter").textContent=
+    String(cur+1).padStart(2,"0")+" / "+String(SCENES.length).padStart(2,"0");
+  [...rail.children].forEach((n,i)=>{n.className=i===cur?"now":(i<cur?"done":"");});
+  for(let i=0;i<4;i++){
+    const el=document.getElementById("s"+(i+1)), d=(sc.stats||[])[i];
+    if(!d){el.classList.remove("on");continue;}
+    el.classList.add("on");
+    el.querySelector(".k").textContent=d[0];
+    const v=el.querySelector(".v");
+    v.textContent=typeof d[1]==="function"?d[1]():d[1];
+    v.className="v"+(d[2]?" "+d[2]:"");
+  }
+}
+
+function play(){
+  cancelAnimationFrame(raf); t0=performance.now(); anim=0;
+  const dur=SCENES[cur].dur||1200;
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const step=now=>{
+    anim=reduce?1:Math.min(1,(now-t0)/dur);
+    render(); paintChrome();
+    if(anim<1) raf=requestAnimationFrame(step);
+  };
+  raf=requestAnimationFrame(step);
+}
+
+function goto(i){
+  cur=Math.max(0,Math.min(SCENES.length-1,i));
+  const sc=SCENES[cur];
+  // any scene that is not the grow scene always talks about forty counties
+  if(!sc.grow && sampleN!==40){ sampleN=40; sampleIdx=[]; tally=[]; }
+  if(sc.sample && !sampleIdx.length) drawSample();
+  if(sc.bulk){ tally=[]; sampleN=40; bulkDraw(sc.bulk); }
+  if(sc.grow){ sampleN=40; tally=[]; bulkDraw(200); }
+  play();
+}
+
+function again(){
+  const sc=SCENES[cur];
+  if(sc.grow){ sampleN=sampleN>=640?40:sampleN*4; tally=[]; bulkDraw(200); play(); return; }
+  if(sc.redraw||sc.sample){ drawSample(); play(); }
+}
+
+document.getElementById("next").addEventListener("click",()=>goto(cur+1));
+addEventListener("keydown",e=>{
+  if(e.key==="ArrowRight"||e.key===" "||e.key==="PageDown"){e.preventDefault();goto(cur+1);}
+  else if(e.key==="ArrowLeft"||e.key==="PageUp"){e.preventDefault();goto(cur-1);}
+  else if(e.key==="r"||e.key==="R"){play();}
+  else if(e.key==="d"||e.key==="D"){again();}
+});
+addEventListener("click",e=>{if(e.target.tagName!=="BUTTON")goto(cur+1);});
+
+resize(); goto(0);
+</script>
