@@ -8,7 +8,7 @@ GitHub Pages serves the files as they are.
 - `index.html` home: photo, bio, job market line, fields, references
 - `research.html` JMP with full abstract, working papers with collapsed abstracts
 - `teaching.html` instructor of record, course animations and TA history
-- `teaching/` five ECO 4421 lecture animations (copies of the Fall 2026 lecture files, with a
+- `teaching/` four ECO 4421 lecture animations (copies of the Fall 2026 lecture files, with a
   `<meta charset>` line added to the two that lacked one) and `thumbs/` preview images
 - `cv/Mathew_CV.pdf` the CV, compiled from the Overleaf project `Anand_Mathew_CV`
 - `site.js` smooth scrolling (Lenis, loaded from jsDelivr); page transitions are pure CSS in `style.css`
