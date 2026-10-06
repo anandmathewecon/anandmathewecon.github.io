@@ -23,6 +23,10 @@ Pushing to `main` updates the site within a minute or two:
     git commit -m "Describe the change"
     git push
 
+When you change `style.css` or `site.js`, also change the `?v=` tag on their
+links in all three HTML pages (for example to today's date). GitHub lets
+browsers reuse old copies for 10 minutes, and the new tag forces a fresh load.
+
 The empty `.nojekyll` file tells GitHub not to run Jekyll on the folder.
 
 ## Updating the CV

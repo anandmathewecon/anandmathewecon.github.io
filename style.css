@@ -208,6 +208,8 @@ footer .wrap {
 
 /* Theme switch, last item in the nav. Shows a moon in light mode, a sun in dark. */
 
+nav ul { align-items: center; }
+
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -221,7 +223,6 @@ footer .wrap {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transform: translateY(5px);
   transition: color 160ms ease, background-color 160ms ease;
 }
 .theme-toggle:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
