@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Lecture 9 animations: small samples, noise and bias</title>
+<title>Sampling Noise and Bias</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{ --blue:#0021A5; --soft:#4A6FD4; --orange:#FA4616; --ink:#6B7280; --bg:#FCFCFE; }
@@ -54,7 +54,7 @@ function tickFades(now){fades=fades.filter(f=>{const k=Math.min(1,(now-f.t0)/f.m
 const A={};
 function startA(){
   clear(); fades=[]; captionEl=null;
-  header("Every FBS carry of 2026, in the order they happened","Animation 1 of 2");
+  header("Yards per carry by number of carries, 2026 FBS season","Animation 1 of 2");
   const X0=190,X1=1470,Y0=150,Y1=760, XMAX=100, YMIN=-15, YMAX=40;
   A.sx=v=>X0+(Math.min(v,XMAX)/XMAX)*(X1-X0);
   A.sy=v=>Y1-((Math.max(YMIN,Math.min(YMAX,v))-YMIN)/(YMAX-YMIN))*(Y1-Y0);
@@ -126,7 +126,7 @@ const B={};
 const NS_=[4,16,64,256,1024];
 function startB(){
   clear(); fades=[]; captionEl=null;
-  header("More data shrinks the scatter. Does it fix the aim?","Animation 2 of 2");
+  header("Random samples and volunteer samples","Animation 2 of 2");
   B.k=0; B.n=NS_[0]; B.playing=true; B.last=0; B.rnd=mul(28);
   B.boards=[
     {cx:470, cy:440, bias:[0,0],     name:"a random sample",            sub:"unbiased"},

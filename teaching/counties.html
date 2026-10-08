@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Three Thousand Counties</title>
+<title>Mean, Standard Deviation and Sampling Error</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -374,56 +374,56 @@ const easeOut=t=>1-Math.pow(1-t,3);
 
 /* ---------- scenes ----------------------------------------------------- */
 const SCENES=[
-{t:"Three Thousand Counties",
+{t:"All 3,144 U.S. Counties",
  s:"Every county in the United States. One dot each. Nobody left out &mdash; this is a <b>population</b>.",
  reveal:1, dur:2600, stats:[["counties","3,144",""]]},
 
-{t:"What Each Dot Is Worth",
+{t:"Median Household Income by County",
  s:"Now shade each dot by its <b>median household income</b>. Darker is richer. Stack all 3,144 values up and you get the distribution along the bottom.",
  shade:1, dist:1, reveal:1, dur:1900,
  stats:[["counties","3,144",""],["poorest",()=>money(Math.min(...inc)),""],["richest",()=>money(Math.max(...inc)),""]]},
 
-{t:"E[X] &mdash; the Balancing Point",
+{t:"E[X], the Mean",
  s:"Where does that picture balance? That single number is your <span class='o'>best guess</span> for a county you know nothing else about.",
  shade:1, dist:1, mean:1, dur:1200,
  stats:[["E[X]",()=>money(MU),"orange"]]},
 
-{t:"SD &mdash; How Far Off That Guess Usually Is",
+{t:"SD, the Standard Deviation",
  s:"A typical county sits about this far from the average. The mean alone would never have told you the country was <b>this spread out</b>.",
  shade:1, dist:1, mean:1, sd:1, dur:1500,
  stats:[["E[X]",()=>money(MU),"orange"],["SD",()=>money(SIG),"orange"],
         ["typical county",()=>money(MU-SIG)+" – "+money(MU+SIG),""]]},
 
-{t:"E[Y | X] &mdash; One Thing About the County",
+{t:"E[Y | X], Metro and Non-Metro Counties",
  s:"Split them: <span class='o'>metro</span> and <span class='b'>non-metro</span>. Two groups, two distributions, <b>two different best guesses</b>.",
  split:1, dist:1, dur:1500,
  stats:[["E[Y | non-metro]",()=>money(MU_N),"blue"],["E[Y | metro]",()=>money(MU_M),"orange"]]},
 
-{t:"Making the Comparison",
+{t:"The Difference in Conditional Means",
  s:"The distance between two conditional averages. <b>Every question in this course has this shape</b> &mdash; a tariff, a training program, a year of schooling.",
  split:1, dist:1, gap:1, dur:1500,
  stats:[["E[Y | non-metro]",()=>money(MU_N),"blue"],["E[Y | metro]",()=>money(MU_M),"orange"],
         ["difference",()=>money(MU_M-MU_N),""]]},
 
-{t:"Now Take the Country Away",
+{t:"A Sample of 40 Counties",
  s:"Every number so far needed all 3,144 counties. <b>You will never have all 3,144.</b> You get the orange dots. Forty of them.",
  dim:1, dist:1, sample:1, dur:900,
  stats:[["you have","40 counties",""],["your estimate",()=>money(sampleMean),"orange"],
         ["the truth",()=>money(MU),"blue"]]},
 
-{t:"Draw Again",
+{t:"A Second Sample of 40",
  s:"Same country, same recipe, a different forty. Press <kbd>D</kbd> and watch the answer move &mdash; <b>not one county changed</b>.",
  dim:1, dist:1, sample:1, tally:1, dur:600, redraw:1,
  stats:[["draws so far",()=>tally.length,""],["this estimate",()=>money(sampleMean),"orange"],
         ["the truth",()=>money(MU),"blue"]]},
 
-{t:"Your Estimate Is a Random Variable",
+{t:"The Sampling Distribution of the Mean",
  s:"Two hundred honest samples. They miss in both directions, but they pile up <b>centred on the truth</b>. That pile is the thing the rest of the semester is about.",
  dim:1, dist:1, sample:1, tally:1, dur:2400, bulk:200,
  stats:[["draws",()=>tally.length,""],["spread of estimates",()=>money(sd(tally)),"orange"],
         ["σ / √n",()=>money(SIG/Math.sqrt(sampleN)),"blue"]]},
 
-{t:"Four Times the Data, Half the Error",
+{t:"Sample Size and the Standard Error",
  s:"Same experiment at <b>n = 40, then 160, then 640</b>. Press <kbd>D</kbd> to step up. The pile tightens by half each time &mdash; that is the <span class='o'>&radic;n rule</span>.",
  dim:1, dist:1, sample:1, tally:1, dur:2000, grow:1,
  stats:[["sample size",()=>sampleN,"orange"],["spread of estimates",()=>money(sd(tally)),"orange"],

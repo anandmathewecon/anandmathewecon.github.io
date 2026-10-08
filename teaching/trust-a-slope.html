@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Lecture 10 animations: how much can you trust a slope?</title>
+<title>The Sampling Distribution of the OLS Slope</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{ --blue:#0021A5; --soft:#4A6FD4; --orange:#FA4616; --ink:#6B7280; --bg:#FCFCFE; }
@@ -86,7 +86,7 @@ function setLine(e,L){ e.setAttribute("x1",L.x1.toFixed(1)); e.setAttribute("y1"
 const A={};
 function startA(){
   clear(); fades=[]; captionEl=null;
-  header("The error and the residual: which one moves?","Animation 1 of 3");
+  header("The error and the residual","Animation 1 of 3");
   A.P=plotArea(250,1150,140,740,0,16,0,100); const P=A.P;
   axes(P,[0,4,8,12,16],[0,25,50,75,100],"X","Y");
   A.clip=clipTo(P);
@@ -140,7 +140,7 @@ const CUM=(()=>{let s=0; return CELLS.map(c=>(s+=c[2]));})(), TOT=CUM[CUM.length
 function drawCell(r){ const u=r()*TOT; let lo=0,hi=CUM.length-1; while(lo<hi){const m=(lo+hi)>>1; if(CUM[m]>u) hi=m; else lo=m+1;} return CELLS[lo]; }
 function startB(){
   clear(); fades=[]; captionEl=null;
-  header("Draw plays at random, fit the line, keep the slope. Repeat.","Animation 2 of 3");
+  header("The sampling distribution of the slope","Animation 2 of 3");
   B.P=plotArea(170,760,150,690,0.5,15.5,0,1); const P=B.P;
   axes(P,[1,3,5,7,9,11,13,15],[0,0.25,0.5,0.75,1],"yards to go","share of the sample that converted",null,v=>Math.round(v*100)+"%");
   B.clip=clipTo(P);
@@ -227,7 +227,7 @@ const D={};
 const DN=[10,25,50,100,400], DS=[3,6,12,20,30], DX=[0.6,1.2,2.4,3.6,4.8];
 function startD(){
   clear(); fades=[]; captionEl=null;
-  header("What makes a slope precise: data, noise, spread in X","Animation 3 of 3");
+  header("Sample size, noise and the spread of X","Animation 3 of 3");
   D.P=plotArea(170,1040,140,640,0,20,0,140); const P=D.P;
   axes(P,[0,5,10,15,20],[0,35,70,105,140],"X","Y");
   D.clip=clipTo(P); D.B0=40; D.B1=3;

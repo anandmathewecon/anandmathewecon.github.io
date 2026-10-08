@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Every Dataset Has a Shape</title>
+<title>Joint, Marginal and Conditional Distributions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -413,19 +413,19 @@ scene({
   tab:"1 · Joint, marginal, conditional",
   table(){return A1TABLE;},
   steps:[
-    {t:"One hundred analysts, six boxes.",
+    {t:"The 100 hires by internship and salary",
      c:"Each one lands in exactly one of six boxes: internship or not, crossed with the salary band they started on. The floor is the table; the height will be the probability."},
-    {t:"Joint — one cell, one bar.",
+    {t:"Joint probability",
      c:"<b>Hover any bar.</b> The six heights are 0.08, 0.16, 0.16 across the interns and 0.30, 0.24, 0.06 across the rest. They add to 1."},
-    {t:"Marginal of X — add across the row and salary disappears.",
+    {t:"Marginal distribution of X",
      c:"The three bars in each internship row slide together into one. <b>P(X = 1) = 0.08 + 0.16 + 0.16 = 0.40</b>, and P(X = 0) = 0.60."},
-    {t:"Marginal of Y — the same move the other way.",
+    {t:"Marginal distribution of Y",
      c:"Now the two bars in each salary column merge. <b>P(Y = 80) = 0.16 + 0.06 = 0.22</b>. A marginal is just a row total or a column total."},
-    {t:"Now I tell you one thing: this person did an internship.",
+    {t:"Conditioning on an internship",
      c:"Sixty people are gone — the back row fades out, and its rows grey out in the table. Only the forty interns are still in the running."},
-    {t:"Conditional — what is left has to add to 1 on its own.",
+    {t:"Conditional distribution of salary",
      c:"Divide each surviving cell by 0.40: <b>0.20, 0.40, 0.40</b>. That is P(Y = y | X = 1). Same shape, rescaled."},
-    {t:"The best guess inside each row.",
+    {t:"Conditional mean of salary",
      c:"<b>E[Y | X = 1] = 40(0.20) + 60(0.40) + 80(0.40) = 64</b> and <b>E[Y | X = 0] = 52</b>. Each row balances on its own plank."}
   ],
   build(){
@@ -584,20 +584,20 @@ const BERKTABLE={
 BERKTABLE.onHover=(gid,on)=>{if(si!==1||!built||!built.hi)return;built.hi(gid,on);};
 
 scene({
-  tab:"2 · Berkeley in six clicks",
+  tab:"2 · Berkeley admissions, 1973",
   table(){return BERKTABLE;},
   steps:[
-    {t:"Berkeley, 1973. A nine-point gap, and a lawsuit.",
+    {t:"Admission rates by sex, 1973",
      c:"2,691 men applied and <b>44%</b> were admitted. 1,835 women applied and <b>30%</b> were admitted. The university was accused of discriminating against women."},
-    {t:"Each headline number is six departments squashed into one.",
+    {t:"The six departments behind each rate",
      c:"The same two bars, cut into the six departments that made them. Each slice is that department's admitted students as a share of <b>all</b> applicants of that sex."},
-    {t:"The two groups did not apply to the same places.",
+    {t:"Where men and women applied",
      c:"Where each group applied, as a share of its own applicants, with the departments ordered from easiest to hardest to get into. <b>Women applied where almost everyone is rejected.</b>"},
-    {t:"Compare inside a department, not across the university.",
+    {t:"Admission rates within departments",
      c:"Department A admitted <b>62%</b> of the men who applied and <b>82%</b> of the women. That is the comparison you actually want."},
-    {t:"In four of the six, women were admitted at an equal or higher rate.",
+    {t:"Women admitted at equal or higher rates in four departments",
      c:"A, B, D and F. In C and E the men's rate is higher by three or four points. Nothing here looks like a nine-point gap against women."},
-    {t:"Did the rows move, or did the weights?",
+    {t:"Rates versus application shares",
      c:"The rows say no gap. The <b>weights</b> — where each group applied — made the headline. Ask that question of every average of averages you ever see."}
   ],
   build(){
@@ -761,20 +761,20 @@ const A3TABLE={
 };
 
 scene({
-  tab:"3 · Four knobs",
+  tab:"3 · Describing a distribution",
   table(){return A3TABLE;},
   steps:[
-    {t:"One curve. Four numbers describe it.",
+    {t:"Four numbers that describe a distribution",
      c:"Start at the normal: <b>skewness 0, kurtosis 3</b>. Every readout below is integrated from the curve you are looking at, so they always agree."},
-    {t:"Knob 1 — center. Where is it?",
+    {t:"Center",
      c:"The <b>center</b> buttons are live. The mean is the balance point; the median is the middle. Right now they sit on top of each other."},
-    {t:"Knob 2 — spread. How spread out is it?",
+    {t:"Spread",
      c:"<b>Spread</b> is live too. Same shape, wider or narrower. The bracket under the curve is one SD either side of the mean."},
-    {t:"Knob 3 — skewness. Which tail is longer?",
+    {t:"Skewness",
      c:"Push <b>skewness</b> up and the right tail stretches. Watch the mean pull away from the median: <b>mean above median means a right tail</b>."},
-    {t:"Knob 4 — kurtosis. How often does something extreme happen?",
+    {t:"Kurtosis",
      c:"<b>Kurtosis</b> changes the tails without changing the center or the spread. The normal is exactly <b>3</b>. Above 3, the shaded tails get fatter."},
-    {t:"All four at once, and the real thing.",
+    {t:"All four, fitted to Florida county income",
      c:"Press <b>show Florida income</b>: the 67-county histogram appears behind the curve and the four knobs snap to the real values — mean 37,096, SD 10,200, skew <b>0.41</b>, kurt <b>2.45</b>."}
   ],
   ctrls:`<div class="ctrl" id="k1"><span class="lbl">center</span><button data-act="c-">−</button><output id="oc">50</output><button data-act="c+">+</button></div>
@@ -960,22 +960,22 @@ const SAYTABLE={
 };
 
 scene({
-  tab:"4 · The normal, built up",
+  tab:"4 · The normal distribution",
   table(i){return i>=8?A3TABLE:SAYTABLE;},
   steps:[
-    {t:"Before the formula, the sentence.",
+    {t:"Reading the notation",
      c:"An empty axis. We are going to write one line of notation, one symbol at a time, and every symbol is a word."},
     {t:"X",c:"<b>The thing you are measuring.</b> A county's income, a student's score, tomorrow's return."},
     {t:"~",c:"Reads <b>is distributed as</b>. Not an equals sign, not an approximation. It says <b>follows this shape</b>."},
     {t:"N",c:"<b>N for normal.</b> The name of the shape — the bell. Nothing more mysterious than a name."},
     {t:"(μ, σ²)",c:"<b>The only two numbers you have to supply.</b> Where it sits, and how wide it is."},
-    {t:"And here is the shape those five symbols name.",
+    {t:"The normal curve",
      c:"The curve draws itself. μ is marked on the axis, and σ is the distance from the middle out to the shoulder of the bell."},
-    {t:"Two knobs, and the shape never changes.",
+    {t:"Changing the mean and the SD",
      c:"The buttons are live. <b>μ slides the curve; σ stretches it.</b> Everything else about a normal curve is fixed forever. Try μ = 100, σ = 15."},
-    {t:"68 — 95 — 99.7.",
+    {t:"The 68-95-99.7 rule",
      c:"Within μ ± σ, <b>68%</b>. Within μ ± 2σ, <b>95%</b>. Within μ ± 3σ, <b>99.7%</b>. These three numbers do not depend on μ or σ."},
-    {t:"Checked on the real thing: 67 Florida counties.",
+    {t:"The rule in 67 Florida counties",
      c:"Per capita income, mean $37,096, SD $10,200. Within one SD: <b>67%</b> of counties. Within two: <b>96%</b>. The rule holds."}
   ],
   ctrls:`<div class="ctrl" id="n1"><span class="lbl">μ</span><button data-act="mu-">−</button><output id="omu">0</output><button data-act="mu+">+</button></div>
@@ -1138,22 +1138,22 @@ const ZTABLE={
 };
 
 scene({
-  tab:"5 · One ruler",
+  tab:"5 · z-scores",
   table(i){return i>=6?A3TABLE:ZTABLE;},
   steps:[
-    {t:"Who did better: SAT 1,300 or ACT 29?",
+    {t:"Comparing an SAT score and an ACT score",
      c:"2024 national figures. SAT: mean 1,024, SD 229. ACT: mean 19.4, SD 5.9. Two different rulers; you cannot subtract them."},
-    {t:"Step one: subtract the mean.",
+    {t:"Subtract the mean",
      c:"Both curves slide so their centres sit at 0. The axes now read <b>deviations</b>: +276 and +9.6. Still two rulers — 276 what, against 9.6 what?"},
-    {t:"Step two: divide by the SD.",
+    {t:"Divide by the SD",
      c:"Both curves stretch or shrink to SD 1. The two axes have become <b>one z axis</b>."},
-    {t:"One axis, two marks.",
+    {t:"Both scores on one scale",
      c:"Now — and only now — the two scores are on the same ruler and can be compared directly."},
-    {t:"z = 1.21 and z = 1.63.",
+    {t:"The two z-scores",
      c:"<b>Z = (X − μ) / σ</b>. 276 / 229 = 1.21; 9.6 / 5.9 = 1.63. <b>The ACT score is the more unusual one.</b>"},
-    {t:"How many test takers sit below each mark?",
+    {t:"Percentiles from z-scores",
      c:"Area to the left of z: <b>88.6%</b> below 1.21 and <b>94.8%</b> below 1.63. That is Φ(z), the normal table — and the third column of the panel on the right."},
-    {t:"Same county, two rulers.",
+    {t:"Alachua County wage and income as z-scores",
      c:"Alachua's weekly wage $1,227 against the state (mean 1,061, SD 168): z = <b>0.99</b>. Its per-capita income $38,869 (mean 37,096, SD 10,200): z = <b>0.17</b>. Unusually well paid, ordinary income."}
   ],
   build(){
