@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hypothesis Tests and p-Values</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --blue:#0021A5; --soft:#4A6FD4; --orange:#FA4616; --ink:#4B5563; --grey:#9AA1AE; --bg:#FCFCFE; }
+  html,body{margin:0;height:100%;background:var(--bg);font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;overflow:hidden;color:var(--ink)}
+  #stage{position:absolute;inset:0 0 86px 0;display:flex;align-items:center;justify-content:center}
+  svg{width:100vw;height:calc(56.25vw);max-height:calc(100vh - 86px);max-width:calc((100vh - 86px)*1.7778)}
+  #controls{position:fixed;left:0;right:0;bottom:30px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;padding:0 16px}
+  #controls button{font:inherit;font-size:15px;padding:7px 14px;border-radius:8px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #controls button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  #controls label{font-size:15px;display:flex;align-items:center;gap:8px}
+  #controls input[type=range]{width:240px;accent-color:var(--orange)}
+  #help{position:fixed;left:16px;bottom:6px;font-size:12px;color:var(--grey)}
+  text{font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif}
+  #infoBtn{position:fixed;top:12px;right:16px;z-index:5;font:inherit;font-size:15px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #infoBtn.on{background:var(--blue);color:#fff}
+  #info{position:fixed;top:56px;right:16px;width:min(400px,90vw);max-height:calc(100vh - 160px);overflow:auto;z-index:4;background:rgba(255,255,255,0.97);border:1.5px solid #D4D8DE;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,0.12);padding:16px 18px;font-size:15px;line-height:1.45;display:none}
+  #info.show{display:block}
+  #info h3{margin:12px 0 4px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:var(--grey)}
+  #info h3:first-child{margin-top:0}
+  #info p{margin:0 0 4px}
+  #info .now{background:#FFF4EF;border-left:4px solid var(--orange);padding:8px 10px;border-radius:6px}
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div id="controls"></div>
+<button id="infoBtn" title="Show or hide the explanation (I)">&#9432; Explain</button>
+<div id="info"><h3>The study</h3><p id="iStudy"></p><h3>What to do</h3><p id="iDo"></p><h3>Look for</h3><p id="iLook"></p><h3>What you are seeing now</h3><p id="iNow" class="now"></p></div>
+<div id="help">&rarr; &larr;: switch animation &nbsp;·&nbsp; F: full screen &nbsp;·&nbsp; I or &#9432;: explanation &nbsp;·&nbsp; use the buttons and sliders below the picture</div>
+<script>
+const C={blue:"#0021A5",soft:"#4A6FD4",orange:"#FA4616",ink:"#4B5563",grey:"#9AA1AE",pale:"#E5E7EB",dark:"#1F2937"};
+const NS="http://www.w3.org/2000/svg", svg=document.getElementById("svg"), ctl=document.getElementById("controls");
+function el(tag,a,p){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e;}
+function txt(x,y,s,a,p){const e=el("text",Object.assign({x,y,"font-size":22,fill:C.ink},a||{}),p);e.textContent=s;return e;}
+function ez(dt,tau){return 1-Math.exp(-dt/tau);}
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function normal(r){let u=0,v=0;while(u===0)u=r();v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+// complementary error function (Numerical Recipes erfcc, fractional error < 1.2e-7)
+function erfc(x){const z=Math.abs(x),t=1/(1+0.5*z);const r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));return x>=0?r:2-r;}
+function Phi(z){return 0.5*erfc(-z/Math.SQRT2);}
+function pTwo(t){return erfc(Math.abs(t)/Math.SQRT2);}
+function dnorm(z){return Math.exp(-z*z/2)/Math.sqrt(2*Math.PI);}
+function fmtP(p){if(p===0||p<1e-15)return "essentially 0";if(p>=0.001)return p.toFixed(3);const e=Math.floor(Math.log10(p));const m=p/Math.pow(10,e);const sup={"-":"⁻","0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"};return m.toFixed(1)+" × 10"+String(e).split("").map(c=>sup[c]).join("");}
+function header(t,s,n){txt(70,70,t,{"font-size":38,"font-weight":700,fill:C.blue});txt(70,108,s,{"font-size":22,fill:C.ink});txt(1530,70,"Animation "+n+" of 3",{"font-size":18,fill:C.grey,"text-anchor":"end"});}
+let capEl=null;function caption(s,col){if(!capEl)return;capEl.textContent=s;capEl.setAttribute("fill",col||C.dark);}
+function makeCaption(){capEl=txt(800,860,"",{"font-size":26,"text-anchor":"middle","font-weight":600});}
+function button(label,fn,on){const b=document.createElement("button");b.textContent=label;if(on)b.classList.add("on");b.onclick=()=>fn(b);ctl.appendChild(b);return b;}
+function group(btns){btns.forEach(b=>b.addEventListener("click",()=>{btns.forEach(x=>x.classList.remove("on"));b.classList.add("on");}));}
+// explanation panel: hidden until the student clicks "Explain" (or presses I)
+const infoEl=document.getElementById("info"),infoBtn=document.getElementById("infoBtn");
+function toggleInfo(){infoEl.classList.toggle("show");infoBtn.classList.toggle("on");}
+infoBtn.onclick=toggleInfo;
+function setInfo(o){document.getElementById("iStudy").innerHTML=o.study;document.getElementById("iDo").innerHTML=o.todo;document.getElementById("iLook").innerHTML=o.look;lastNow="";}
+let lastNow="";function explain(h){if(h===lastNow)return;lastNow=h;document.getElementById("iNow").innerHTML=h;}
+function pct(x,d){return (100*x).toFixed(d===undefined?1:d)+"%";}
+function slider(label,min,max,val,step,fn){const l=document.createElement("label");l.textContent=label;const r=document.createElement("input");r.type="range";r.min=min;r.max=max;r.value=val;r.step=step;r.oninput=()=>fn(+r.value);l.appendChild(r);ctl.appendChild(l);return r;}
+
+/* =====================================================================
+   SCENE 1: a world where nothing is going on (Joy guessing / useless vaccine)
+   ===================================================================== */
+const S1={mode:"joy"};
+S1.build=function(){
+  const V=S1.mode!=="joy";
+  const M=!V
+    ?{n:12,obs:11,title:"If Joy were just guessing",sub:"Simulation. 10,000 people who can't smell anything each guess 12 shirts: a coin flip per shirt.",
+      xl:"shirts guessed right, out of 12",obsL:"Joy: 11",half:"6: half",cols:6,gap:44,r:16,
+      lastT:k=>"this guesser: "+k+" right, "+(12-k)+" wrong",legA:"right",legB:"wrong",ticks:[0,2,4,6,8,10,12],
+      cap0:"Press “Run 1”: one guesser, 12 coin flips.",cap1:"Guessers land around 6. Keep running.",
+      capN:(N,share)=>"Of "+N.toLocaleString()+" guessers, only "+(100*share).toFixed(1)+"% got 11 or more. Joy is hard to explain as luck."}
+    :{n:170,obs:8,title:"A world where the vaccine does nothing",sub:"Simulation. 170 people catch COVID. If the vaccine is useless, a coin decides which group each case is in.",
+      xl:"cases in the vaccine group",obsL:"real trial: 8",half:"85",cols:17,gap:21,r:7,
+      lastT:k=>"this trial: "+k+" vaccine, "+(170-k)+" placebo",legA:"vaccine group",legB:"placebo group",ticks:[0,40,85,130,170],
+      cap0:"Press “Run 1”: flip a coin for each of the 170 cases.",cap1:"Each trial lands near 85, and its t near 0. Keep running.",
+      capN:(N,share)=>"Useless-vaccine trials: t lands past ±1.96 only "+(100*share).toFixed(1)+"% of the time. The real trial's t is −27.8."};
+  header(M.title,M.sub,1);
+  if(!V)setInfo({
+    study:"Joy Milne said she could smell Parkinson's disease. A scientist tested her with 12 t-shirts: 6 worn by people with Parkinson's, 6 by people without. Not knowing whose shirt was whose, she got <b>11 of 12</b> right.",
+    todo:"This animation builds the world where <b>H&#8320; is true</b>: Joy is just guessing, so each shirt is a coin flip. Click <b>Run 1</b> a few times to watch single guessers, then <b>Run 10,000</b>. Click <b>Vaccine</b> for the same idea with the vaccine trial, where we also compute t.",
+    look:"Where the guessers pile up (around 6 of 12), and how few of them reach Joy's 11 (the orange bars on the right)."});
+  else setInfo({
+    study:"Fall 2020: about 43,000 volunteers in Pfizer's COVID vaccine trial. A coin decided who got the vaccine and who got a salt-water placebo. Over the next months, <b>170</b> of them caught COVID: <b>8</b> in the vaccine group and <b>162</b> in the placebo group.",
+    todo:"This animation builds the world where <b>H&#8320; is true</b>: the vaccine does nothing, so each of the 170 cases is equally likely to be in either group. Click <b>Run 1</b>, then <b>Run 10,000</b>. Each simulated trial is shown twice: its count (middle) and its t-statistic, t = (Y&#772; &minus; 0.5)/(s/&radic;170) (right).",
+    look:"Middle: the counts pile up around 85, far from the real 8. Right: the t's pile up in a bell around 0, and only about 5% land past &plusmn;1.96 (orange). The real trial's t, &minus;27.8, is far off the left edge."});
+  const DX=90,DY=170;
+  txt(DX,DY-12,!V?"one guesser":"one trial",{"font-size":20,"font-weight":700,fill:C.dark});
+  const dots=[];for(let i=0;i<M.n;i++){dots.push(el("circle",{cx:DX+(i%M.cols)*M.gap+M.r,cy:DY+20+M.r+Math.floor(i/M.cols)*M.gap,r:M.r,fill:C.pale}));}
+  const ly=DY+(!V?150:250);
+  const lastT=txt(DX,ly,"",{"font-size":21});
+  el("circle",{cx:DX+8,cy:ly+40,r:7,fill:C.blue});txt(DX+24,ly+47,M.legA,{"font-size":18});
+  el("circle",{cx:DX+190,cy:ly+40,r:7,fill:C.orange});txt(DX+206,ly+47,M.legB,{"font-size":18});
+  // counts panel
+  const X0=V?520:580,X1=V?990:1530,Y1=690,YT=250;const sx=v=>X0+v/M.n*(X1-X0);const bw=Math.max(2.4,(X1-X0)/(M.n+1)*0.8);
+  if(V)txt((X0+X1)/2,YT-40,"how many cases",{"text-anchor":"middle","font-size":21,"font-weight":700,fill:C.dark});
+  el("line",{x1:X0,y1:Y1,x2:X1,y2:Y1,stroke:C.grey,"stroke-width":2});
+  M.ticks.forEach(v=>{txt(sx(v),Y1+28,v,{"text-anchor":"middle","font-size":17,fill:C.grey});});
+  txt((X0+X1)/2,Y1+62,M.xl,{"text-anchor":"middle","font-size":20});
+  const bars=[];for(let v=0;v<=M.n;v++)bars.push({r:el("rect",{x:sx(v)-bw/2,y:Y1,width:bw,height:0,fill:(!V&&v>=11)?C.orange:C.soft}),c:0,t:0});
+  el("line",{x1:sx(M.obs),y1:YT,x2:sx(M.obs),y2:Y1,stroke:C.orange,"stroke-width":4,"stroke-dasharray":!V?"6 6":"none"});
+  txt(sx(M.obs)+(!V?-10:8),YT+(V?20:-8),M.obsL,{"font-size":V?19:22,"font-weight":700,fill:C.orange,"text-anchor":!V?"end":"start"});
+  el("line",{x1:sx(M.n/2),y1:YT+40,x2:sx(M.n/2),y2:Y1,stroke:C.dark,"stroke-width":2,"stroke-dasharray":"6 6"});
+  if(!V)txt(sx(M.n/2),YT+30,M.half,{"text-anchor":"middle","font-size":19,fill:C.dark});
+  // t panel (vaccine only)
+  const T={};
+  if(V){
+    T.X0=1060;T.X1=1540;T.L=5;T.H=360;const tx=z=>T.X0+(z+T.L)/(2*T.L)*(T.X1-T.X0),ty=y=>Y1-y/0.4*T.H;T.tx=tx;T.ty=ty;
+    txt((T.X0+T.X1)/2,YT-40,"the same trials as t-statistics",{"text-anchor":"middle","font-size":21,"font-weight":700,fill:C.dark});
+    el("line",{x1:T.X0,y1:Y1,x2:T.X1,y2:Y1,stroke:C.grey,"stroke-width":2});
+    [-4,-2,0,2,4].forEach(z=>txt(tx(z),Y1+28,z,{"text-anchor":"middle","font-size":17,fill:C.grey}));
+    txt((T.X0+T.X1)/2,Y1+62,"t = (Ȳ − 0.5) / (s/√170)",{"text-anchor":"middle","font-size":20});
+    [-1.96,1.96].forEach(z=>{el("line",{x1:tx(z),y1:YT,x2:tx(z),y2:Y1,stroke:C.grey,"stroke-width":2,"stroke-dasharray":"7 6"});txt(tx(z),YT-6,(z>0?"+":"−")+"1.96",{"text-anchor":"middle","font-size":16,fill:C.grey});});
+    T.tk=[];T.bars=[];
+    for(let k=1;k<170;k++){const p=k/170,s=Math.sqrt(p*(1-p)*170/169),t=(p-0.5)/(s/Math.sqrt(170));T.tk[k]=t;}
+    for(let k=1;k<170;k++){const t=T.tk[k];if(Math.abs(t)>T.L)continue;const dt=Math.abs(T.tk[k+1<170?k+1:k]-T.tk[k-1>0?k-1:k])/2||0.15;
+      T.bars.push({k,dt,r:el("rect",{x:tx(t)-dt/(2*T.L)*(T.X1-T.X0)*0.42,width:dt/(2*T.L)*(T.X1-T.X0)*0.84,y:Y1,height:0,fill:Math.abs(t)>1.96?C.orange:C.soft,"fill-opacity":0.8}),c:0,t:0});}
+    let d="";for(let i=0;i<=300;i++){const z=-T.L+i*2*T.L/300;d+=(i?"L":"M")+tx(z)+","+ty(dnorm(z));}
+    T.bell=el("path",{d,fill:"none",stroke:C.blue,"stroke-width":3,opacity:0});
+    el("path",{d:"M"+(T.X0+8)+","+(YT+60)+" l-14,0",stroke:C.orange,"stroke-width":4,"marker-end":""});
+    txt(T.X0+4,YT+40,"← real trial: t = −27.8,",{"font-size":17,"font-weight":700,fill:C.orange});
+    txt(T.X0+4,YT+62,"   far off this chart",{"font-size":17,"font-weight":700,fill:C.orange});
+  }
+  const stat=txt(1540,150,"",{"font-size":21,fill:C.dark,"text-anchor":"end"});const stat2=txt(1540,180,"",{"font-size":21,fill:C.dark,"text-anchor":"end"});
+  makeCaption();
+  const counts=new Array(M.n+1).fill(0);let N=0,mn=999,hi=0,tout=0,lastK=null;const r=rng(!V?12:17);let queue=0;
+  function one(show){let k=0;for(let i=0;i<M.n;i++){if(r()<0.5)k++;}counts[k]++;N++;mn=Math.min(mn,k);if(k>=11)hi++;lastK=k;
+    if(V&&k>0&&k<170&&Math.abs(T.tk[k])>1.96)tout++;
+    if(show){for(let i=0;i<M.n;i++)dots[i].setAttribute("fill",i<k?C.blue:C.orange);lastT.textContent=M.lastT(k)+(V&&k>0&&k<170?"  →  t = "+T.tk[k].toFixed(2):"");}}
+  function refresh(){const m=Math.max(...counts);bars.forEach((b,v)=>b.t=m?counts[v]/m*(Y1-YT-70):0);
+    if(V){T.bars.forEach(b=>b.t=N?counts[b.k]/N/b.dt/0.4*T.H:0);T.bell.setAttribute("opacity",N>=200?1:0);}
+    stat.textContent=N?(N.toLocaleString()+(!V?" guessers":" trials with a useless vaccine")):"";
+    stat2.textContent=N?(!V?"got 11 or more right: "+pct(hi/N):"t past ±1.96: "+pct(tout/N)+"   ·   fewest cases: "+mn):"";
+    if(N===0)caption(M.cap0);else if(N<200)caption(M.cap1);else caption(M.capN(N,!V?hi/N:tout/N),C.orange);
+    if(!V){
+      if(N===0)explain("Nothing has run yet. Click <b>Run 1</b>: one person who can't smell anything guesses all 12 shirts, a coin flip each.");
+      else if(N<200)explain("The last guesser got <b>"+lastK+" of 12</b> right. Guessers who flip coins usually get between 4 and 8 right; the blue bars show how often each score has come up so far ("+N+" guesser"+(N>1?"s":"")+"). Keep running to see the full shape.");
+      else explain("<b>"+N.toLocaleString()+"</b> guessers. They pile up around 6, half right, as a coin flip predicts. Only <b>"+hi+"</b> of them ("+pct(hi/N)+") got 11 or more right, like Joy. The exact chance is 13 in 4,096, or 0.3%.<br><br>So if H&#8320; were true and Joy were guessing, a score like hers would be very rare. That is the evidence against H&#8320;.");
+    } else {
+      if(N===0)explain("Nothing has run yet. Click <b>Run 1</b>: the 170 COVID cases are split between the two groups by coin flips, as if the vaccine did nothing.");
+      else if(N<200)explain("The last useless-vaccine trial put <b>"+lastK+"</b> of the 170 cases in the vaccine group, so Y&#772; = "+(lastK/170).toFixed(3)+" and its t-statistic is <b>"+T.tk[lastK].toFixed(2)+"</b>. Counts land near 85, so t lands near 0. "+N+" trial"+(N>1?"s":"")+" so far.");
+      else explain("<b>"+N.toLocaleString()+"</b> trials with a useless vaccine.<br><br><b>Middle:</b> the counts land around 85, give or take about 6 or 7. The fewest so far: "+mn+". The real trial had 8.<br><br><b>Right:</b> the same trials as t-statistics. They form a bell centred at 0 (the blue curve), and only <b>"+pct(tout/N)+"</b> land past &plusmn;1.96 (orange), close to the 5% the bell promises.<br><br>The real trial's t is <b>&minus;27.8</b>, far beyond anything in this picture. So we reject H&#8320;: the vaccine works.");
+    }}
+  refresh();
+  button("Joy: 12 shirts",()=>{S1.mode="joy";show(0);},!V);
+  button("Vaccine: 170 cases",()=>{S1.mode="vaccine";show(0);},V);
+  button("Run 1",()=>{one(true);refresh();});
+  button("Run 100",()=>{queue+=100;});
+  button("Run 10,000",()=>{queue+=10000;});
+  button("Reset",()=>{show(0);});
+  S1.frame=function(dt){if(queue>0){const k=Math.min(queue,queue>1000?400:4);for(let i=0;i<k;i++)one(i===k-1);queue-=k;refresh();}
+    const a=ez(dt,0.25);bars.forEach(b=>{b.c+=(b.t-b.c)*a;b.r.setAttribute("y",Y1-b.c);b.r.setAttribute("height",b.c);});
+    if(V)T.bars.forEach(b=>{b.c+=(b.t-b.c)*a;const h=Math.min(b.c,T.H+20);b.r.setAttribute("y",Y1-h);b.r.setAttribute("height",h);});};
+};
+
+/* =====================================================================
+   SCENE 5: small samples, where t lands when H0 is true
+   ===================================================================== */
+const S5={};
+S5.build=function(){
+  header("Small samples: where t lands when H₀ is true","Simulation. Draw n people from a population where H₀ is true, compute t with s from the same people. Repeat.",5);
+  const X0=150,X1=1450,Y1=650,H=400,L=6,BW=0.25;const sx=z=>X0+(z+L)/(2*L)*(X1-X0);
+  el("line",{x1:X0,y1:Y1,x2:X1,y2:Y1,stroke:C.grey,"stroke-width":2});
+  for(let z=-6;z<=6;z+=2)txt(sx(z),Y1+30,z,{"text-anchor":"middle","font-size":18,fill:C.grey});
+  txt((X0+X1)/2,Y1+64,"t-statistic",{"text-anchor":"middle","font-size":21});
+  const NB=Math.round(2*L/BW);const bars=[];
+  for(let b=0;b<NB;b++){const z0=-L+b*BW;bars.push({r:el("rect",{x:sx(z0)+1,width:sx(z0+BW)-sx(z0)-2,y:Y1,height:0,fill:Math.abs(z0+BW/2)>1.96?C.orange:C.soft,"fill-opacity":0.7}),c:0,t:0});}
+  let d="";for(let i=0;i<=400;i++){const z=-L+i*2*L/400;d+=(i?"L":"M")+sx(z)+","+(Y1-dnorm(z)/0.4*H);}
+  el("path",{d,fill:"none",stroke:C.blue,"stroke-width":4});
+  txt(sx(2.6),Y1-dnorm(2.6)/0.4*H-40,"the bell (large n)",{"font-size":19,fill:C.blue});
+  [-1.96,1.96].forEach(z=>{el("line",{x1:sx(z),y1:Y1-H-10,x2:sx(z),y2:Y1,stroke:C.grey,"stroke-width":2,"stroke-dasharray":"7 6"});txt(sx(z),Y1-H-20,(z>0?"+":"−")+"1.96",{"text-anchor":"middle","font-size":18,fill:C.grey});});
+  const st=txt(1450,180,"",{"text-anchor":"end","font-size":30,"font-weight":700,fill:C.orange});
+  const st2=txt(1450,216,"",{"text-anchor":"end","font-size":20,fill:C.ink});
+  makeCaption();
+  setInfo({study:"Why small samples need a bigger cutoff. Each sample: draw <b>n</b> people from a population where <b>H&#8320; is true</b>, and compute t = (Y&#772; &minus; &mu;&#8320;)/(s/&radic;n), with s estimated from those same n people. Repeat 20,000 times.",
+    todo:"Click <b>n = 5</b>, then <b>n = 10</b>, <b>n = 25</b> and <b>n = 100</b>. Each click runs 20,000 samples.",
+    look:"How the bars compare with the blue bell, and the share of t's past &plusmn;1.96 (orange). The bell promises 5%."});
+  const crit={5:2.78,10:2.26,25:2.06,100:1.98};
+  let n=5,N=0,out=0;const cnt=new Array(NB).fill(0);const r=rng(55);let queue=0;
+  function one(){let s=0,q=0;for(let i=0;i<n;i++){const x=normal(r);s+=x;q+=x*x;}const m=s/n,sd=Math.sqrt((q-n*m*m)/(n-1));const t=m/(sd/Math.sqrt(n));
+    N++;if(Math.abs(t)>1.96)out++;const b=Math.floor((t+L)/BW);if(b>=0&&b<NB)cnt[b]++;}
+  function refresh(){bars.forEach((b,i)=>b.t=N?cnt[i]/N/BW/0.4*H:0);
+    st.textContent=N?("past ±1.96: "+(100*out/N).toFixed(1)+"%"):"";st2.textContent=N?(N.toLocaleString()+" samples of n = "+n+"  ·  the bell says 5%"):"";
+    if(!N)caption("Pick a sample size, then run.");
+    else if(n<=10)caption("With n = "+n+", t lands past ±1.96 far more than 5% of the time. A 1.96 cutoff would give too many false alarms.",C.orange);
+    else caption("With n = "+n+", the t's follow the bell closely: 1.96 works.",C.blue);
+    if(!N)explain("Nothing has run yet. Click a sample size.");
+    else explain("<b>n = "+n+"</b>, "+N.toLocaleString()+" samples, all from a world where H&#8320; is true. <b>"+pct(out/N)+"</b> of the t's landed past &plusmn;1.96. The bell says 5%."+
+      (n<=10?"<br><br>With so few people, s is a shaky estimate. When it comes out too small by luck, the ruler s/&radic;n is too short and t comes out too big. Using 1.96 here would give too many false alarms.":"<br><br>With this many people, s is a good estimate of the true spread, so t follows the bell and 1.96 works.")+
+      "<br><br>The correct 5% cutoff for n = "+n+" is <b>"+crit[n]+"</b> (the t distribution with n &minus; 1 = "+(n-1)+" degrees of freedom).");}
+  function reset(){N=0;out=0;cnt.fill(0);queue=0;refresh();}
+  refresh();
+  const bn=[5,10,25,100].map(v=>button("n = "+v,()=>{n=v;reset();queue=20000;},v===5));group(bn);
+  button("Run 20,000",()=>{queue+=20000;});
+  S5.frame=function(dt){if(queue>0){const k=Math.min(queue,800);for(let i=0;i<k;i++)one();queue-=k;refresh();}
+    const a=ez(dt,0.25);bars.forEach(b=>{b.c+=(b.t-b.c)*a;b.r.setAttribute("y",Y1-b.c);b.r.setAttribute("height",b.c);});};
+};
+
+/* =====================================================================
+   SCENE 2: the t-statistic and the p-value, with knobs
+   ===================================================================== */
+const S2={};
+S2.build=function(){
+  header("Build a t, read its p-value","Turn the knobs: Ȳ, μ₀, s and n make t. The bell: where t lands if H₀ is true. Orange: the p-value.",2);
+  const X0=150,X1=1450,Y1=680,H=380,L=6;const sx=z=>X0+(z+L)/(2*L)*(X1-X0),sy=y=>Y1-y/0.4*H;
+  el("line",{x1:X0,y1:Y1,x2:X1,y2:Y1,stroke:C.grey,"stroke-width":2});
+  for(let z=-6;z<=6;z+=2)txt(sx(z),Y1+30,z,{"text-anchor":"middle","font-size":18,fill:C.grey});
+  txt((X0+X1)/2,Y1+62,"t-statistic",{"text-anchor":"middle","font-size":21});
+  const tailL=el("path",{fill:C.orange,"fill-opacity":0.75}),tailR=el("path",{fill:C.orange,"fill-opacity":0.75});
+  let d="";for(let i=0;i<=400;i++){const z=-L+i*2*L/400;d+=(i?"L":"M")+sx(z)+","+sy(dnorm(z));}
+  el("path",{d,fill:"none",stroke:C.blue,"stroke-width":4});
+  [-1.96,1.96].forEach(z=>{el("line",{x1:sx(z),y1:Y1-H-10,x2:sx(z),y2:Y1,stroke:C.grey,"stroke-width":2,"stroke-dasharray":"7 6"});txt(sx(z),Y1-H-20,(z>0?"+":"−")+"1.96",{"text-anchor":"middle","font-size":18,fill:C.grey});});
+  const mk=el("line",{y1:Y1-H+30,y2:Y1,stroke:C.dark,"stroke-width":4});const mkT=txt(0,Y1-H+20,"",{"text-anchor":"middle","font-size":22,"font-weight":700,fill:C.dark});
+  // the formula, live
+  const f1=txt(70,175,"",{"font-size":26,"font-weight":700,fill:C.dark});
+  const f2=txt(70,212,"",{"font-size":21,fill:C.ink});
+  const pT=txt(1530,175,"",{"text-anchor":"end","font-size":32,"font-weight":700,fill:C.orange});
+  const vT=txt(1530,212,"",{"text-anchor":"end","font-size":21,"font-weight":600});
+  makeCaption();
+  setInfo({study:"Two results from the lecture. The <b>vaccine trial</b>: 8 of 170 cases in the vaccine group (Y&#772; = 0.047, s = 0.21), t = &minus;27.8. And a <b>what if</b>: 78 of 170 (Y&#772; = 0.459, s = 0.50), t = &minus;1.1.",
+    todo:"Click a preset, then <b>turn the knobs</b>: Y&#772; (what we saw), &mu;&#8320; (what H&#8320; says), s (spread of the answers) and n (how many). The formula at the top updates, and so does t on the bell. Or skip the ingredients and <b>set t directly</b> with the last slider.",
+    look:"A bigger gap Y&#772; &minus; &mu;&#8320; pushes t out. A bigger s pulls it back in. A bigger n pushes it out (the ruler s/&radic;n shrinks). The orange area beyond t, on both sides, is the p-value; at |t| = 1.96 it is exactly 0.05."});
+  const st={y:0.459,m:0.5,s:0.5,n:170};let cur=0,label="what if 78 of 170",lastR="";
+  let tDirect=null;const tform=()=>(st.y-st.m)/(st.s/Math.sqrt(st.n));const tval=()=>tDirect!==null?tDirect:tform();cur=tval();
+  function tail(a,b){let s="M"+sx(a)+","+Y1;for(let i=0;i<=120;i++){const z=a+(b-a)*i/120;s+="L"+sx(z)+","+sy(dnorm(z));}return s+"L"+sx(b)+","+Y1+"Z";}
+  function knob(name,min,max,step,key,dg){const l=document.createElement("label");const sp=document.createElement("b");l.append(name+" ",sp);
+    const r=document.createElement("input");r.type="range";r.min=min;r.max=max;r.step=step;r.value=st[key];r.style.width="150px";
+    const upd=()=>{sp.textContent=(+st[key]).toFixed(dg);};upd();
+    r.oninput=()=>{st[key]=+r.value;label="";tDirect=null;upd();syncT();bs.forEach(b=>b.classList.remove("on"));};l.appendChild(r);ctl.appendChild(l);return{r,upd,key};}
+  const knobs=[knob("Ȳ",0,1,0.001,"y",3),knob("μ₀",0,1,0.01,"m",2),knob("s",0.05,1,0.01,"s",2),knob("n",5,2000,1,"n",0)];
+  const tl=document.createElement("label");const tsp=document.createElement("b");tl.append("or set t directly ",tsp);
+  const tr=document.createElement("input");tr.type="range";tr.min=-6;tr.max=6;tr.step=0.01;tr.style.width="200px";tl.appendChild(tr);ctl.appendChild(tl);
+  function syncT(){const v=tval();tr.value=Math.max(-6,Math.min(6,v));tsp.textContent=v.toFixed(2);}
+  tr.oninput=()=>{tDirect=+tr.value;label="";tsp.textContent=tDirect.toFixed(2);bs.forEach(b=>b.classList.remove("on"));};
+  syncT();
+  function preset(v,lab){Object.assign(st,v);label=lab;tDirect=null;knobs.forEach(k=>{k.r.value=st[k.key];k.upd();});syncT();}
+  const bs=[button("What if 78 of 170",()=>preset({y:0.459,m:0.5,s:0.5,n:170},"what if 78 of 170"),true),button("Vaccine trial: 8 of 170",()=>preset({y:0.047,m:0.5,s:0.212,n:170},"vaccine trial"))];group(bs);
+  S2.frame=function(dt){const tt=tval();const a=ez(dt,0.3);cur+=(tt-cur)*a;const c=Math.max(-L,Math.min(L,cur)),ac=Math.min(Math.abs(c),L);
+    tailL.setAttribute("d",tail(-L,-ac));tailR.setAttribute("d",tail(ac,L));
+    mk.setAttribute("x1",sx(c));mk.setAttribute("x2",sx(c));mkT.setAttribute("x",sx(c));
+    mkT.textContent=(Math.abs(cur)>L?"t = "+cur.toFixed(1)+" (off the chart)":"t = "+cur.toFixed(2));
+    const se=st.s/Math.sqrt(st.n),gap=st.y-st.m;
+    if(tDirect!==null){f1.textContent="t set directly with the slider: t = "+tt.toFixed(2);f2.textContent="(move any knob to build t from Ȳ, μ₀, s and n again)";}
+    else{f1.textContent="t = (Ȳ − μ₀) / (s/√n) = ("+st.y.toFixed(3)+" − "+st.m.toFixed(2)+") / ("+st.s.toFixed(2)+"/√"+st.n+")";
+    f2.textContent="= gap "+(gap>=0?"":"−")+Math.abs(gap).toFixed(3)+"  /  ruler "+se.toFixed(4)+"  =  "+tt.toFixed(2);}
+    const p=pTwo(tt);pT.textContent="p = "+fmtP(p);
+    if(p<0.05){vT.textContent="p < 0.05: reject H₀";vT.setAttribute("fill",C.orange);}else{vT.textContent="p ≥ 0.05: fail to reject H₀";vT.setAttribute("fill",C.blue);}
+    if(Math.abs(tt)<1.96)caption((label?label+": ":"")+"a t like this happens often when H₀ is true. Not surprising.",C.blue);
+    else if(Math.abs(tt)<4)caption((label?label+": ":"")+"rare if H₀ is true, past ±1.96, so p < 0.05.",C.orange);
+    else caption((label?label+": ":"")+"almost never happens if H₀ is true. Very strong evidence against it.",C.orange);
+    const key=[st.y,st.m,st.s,st.n,tDirect].join()+label;if(key!==lastR&&Math.abs(cur-tt)<0.02){lastR=key;
+      if(tDirect!==null){explain("t = <b>"+tt.toFixed(2)+"</b>, set directly with the slider: the result is "+Math.abs(tt).toFixed(1)+" standard errors "+(tt>=0?"above":"below")+" what H&#8320; says.<br><br>p-value = <b>"+fmtP(p)+"</b>: if H&#8320; were true, a t at least this far from 0 would happen "+(p<1e-15?"essentially never":(p>=0.001?"about "+pct(p)+" of the time":"less than 1 time in 1,000"))+". "+(p<0.05?"Below 0.05, so we <b>reject H&#8320;</b>.":"Not below 0.05, so we <b>fail to reject H&#8320;</b> (which does not prove H&#8320;).")+"<br><br>Watch the orange area: at |t| = 1.96 it is exactly 0.05.");}
+      else explain((label?"<b>"+label[0].toUpperCase()+label.slice(1)+"</b><br><br>":"")+
+        "<b>The gap</b>: Y&#772; &minus; &mu;&#8320; = "+st.y.toFixed(3)+" &minus; "+st.m.toFixed(2)+" = "+gap.toFixed(3)+".<br>"+
+        "<b>The ruler</b>: s/&radic;n = "+st.s.toFixed(2)+"/&radic;"+st.n+" = "+se.toFixed(4)+".<br>"+
+        "<b>t</b> = gap / ruler = <b>"+tt.toFixed(2)+"</b>: the result is "+Math.abs(tt).toFixed(1)+" rulers "+(tt>=0?"above":"below")+" what H&#8320; says.<br><br>"+
+        "p-value = <b>"+fmtP(p)+"</b>: if H&#8320; were true, a t at least this far from 0 would happen "+(p<1e-15?"essentially never":(p>=0.001?"about "+pct(p)+" of the time":"less than 1 time in 1,000"))+". "+
+        (p<0.05?"Below 0.05, so we <b>reject H&#8320;</b>.":"Not below 0.05, so we <b>fail to reject H&#8320;</b> (which does not prove H&#8320;).")+
+        "<br><br>Try it: double n and the ruler shrinks by &radic;2, so |t| grows; raise s and |t| shrinks.");}};
+};
+
+/* =====================================================================
+   SCENE 3: jelly beans: one color first, then twenty
+   ===================================================================== */
+const S3={mode:"one"};
+S3.build=function(){
+  const one=S3.mode==="one";
+  const r=rng(one?501:882);
+  function test(){let s1=0,s2=0,q1=0,q2=0;for(let j=0;j<50;j++){const a=normal(r),c=normal(r);s1+=a;s2+=c;q1+=a*a;q2+=c*c;}
+    const m1=s1/50,m2=s2/50,v1=(q1-50*m1*m1)/49,v2=(q2-50*m2*m2)/49;return (m1-m2)/Math.sqrt(v1/50+v2/50);}
+  if(one){
+    header("Test one jelly bean, again and again","Simulation. Green jelly beans do nothing. Each test: 50 people eat them, 50 don't, compare acne, compute t.",3);
+    setInfo({study:"Based on xkcd comic 882, “Significant.” Do green jelly beans cause acne? Each test: 50 people eat green jelly beans, 50 don't, and the two groups' acne is compared with a t-statistic.",
+      todo:"In this simulation green jelly beans <b>do nothing</b>: H&#8320; is true. Click <b>Run 1 test</b> a few times and count how often H&#8320; is rejected (|t| &gt; 1.96). Then <b>Run 100 tests</b>. When ready, click <b>20 jelly beans</b>.",
+      look:"Most t's land between &minus;1.96 and 1.96. About <b>1 test in 20</b> (5%) lands outside, in orange: H&#8320; rejected, a false alarm. That is exactly what a 5% significance level means."});
+    const bx=230,by=330;
+    el("ellipse",{cx:bx,cy:by,rx:60,ry:88,fill:"#16A34A",transform:`rotate(-20 ${bx} ${by})`});
+    el("ellipse",{cx:bx-18,cy:by-35,rx:12,ry:22,fill:"#ffffff","fill-opacity":0.35,transform:`rotate(-20 ${bx-18} ${by-35})`});
+    txt(bx,by+130,"green",{"text-anchor":"middle","font-size":22,"font-weight":700,fill:"#16A34A"});
+    const X0=430,X1=1500,Y1=640,L=4,BW=0.2,NB=Math.round(2*L/BW);const sx=z=>X0+(z+L)/(2*L)*(X1-X0);
+    el("line",{x1:X0,y1:Y1,x2:X1,y2:Y1,stroke:C.grey,"stroke-width":2});
+    [-4,-2,0,2,4].forEach(z=>txt(sx(z),Y1+28,z,{"text-anchor":"middle","font-size":17,fill:C.grey}));
+    txt((X0+X1)/2,Y1+60,"t-statistic of each test",{"text-anchor":"middle","font-size":20});
+    [-1.96,1.96].forEach(z=>{el("line",{x1:sx(z),y1:300,x2:sx(z),y2:Y1,stroke:C.orange,"stroke-width":2,"stroke-dasharray":"8 6"});txt(sx(z),290,(z>0?"+":"−")+"1.96",{"text-anchor":"middle","font-size":17,fill:C.orange});});
+    txt(sx(-3.1),330,"reject H₀",{"text-anchor":"middle","font-size":18,"font-weight":700,fill:C.orange});txt(sx(3.1),330,"reject H₀",{"text-anchor":"middle","font-size":18,"font-weight":700,fill:C.orange});
+    txt(sx(0),330,"fail to reject",{"text-anchor":"middle","font-size":18,"font-weight":700,fill:C.blue});
+    const cnt=new Array(NB).fill(0);const bars=[];
+    for(let b=0;b<NB;b++){const z0=-L+b*BW;bars.push({r:el("rect",{x:sx(z0)+1,width:sx(z0+BW)-sx(z0)-2,y:Y1,height:0,fill:Math.abs(z0+BW/2)>1.96?C.orange:C.soft,"fill-opacity":0.85,rx:2}),c:0,t:0});}
+    const mk=el("line",{y1:350,y2:Y1,stroke:C.dark,"stroke-width":3,opacity:0});
+    const big=txt(1500,165,"",{"text-anchor":"end","font-size":30,"font-weight":700,fill:C.dark});
+    const big2=txt(1500,205,"",{"text-anchor":"end","font-size":22,fill:C.ink});
+    const lastT=txt(430,250,"",{"font-size":22,"font-weight":600});
+    makeCaption();
+    let N=0,rej=0,lt=null,queue=0;
+    function add(){const t=test();N++;lt=t;if(Math.abs(t)>1.96)rej++;const b=Math.floor((Math.max(-L+1e-9,Math.min(L-1e-9,t))+L)/BW);cnt[b]++;}
+    function refresh(){const mx=Math.max(1,...cnt);const unit=Math.min(14,280/mx);bars.forEach((b,i)=>b.t=cnt[i]*unit);
+      big.textContent=N?("H₀ rejected: "+rej+" of "+N+" tests"):"";big2.textContent=N?("that is "+pct(rej/N)+" of the time   ·   the 5% level promises 5%"):"";
+      if(lt!==null){const rj=Math.abs(lt)>1.96;lastT.textContent="test #"+N+": t = "+lt.toFixed(2)+(rj?"  →  H₀ rejected: a false alarm!":"  →  fail to reject");lastT.setAttribute("fill",rj?C.orange:C.blue);
+        mk.setAttribute("x1",sx(Math.max(-L,Math.min(L,lt))));mk.setAttribute("x2",sx(Math.max(-L,Math.min(L,lt))));mk.setAttribute("opacity",1);}
+      if(!N)caption("Click “Run 1 test”. Count how often H₀ gets rejected.");
+      else if(N<40)caption("Keep counting: how many of the tests so far landed in orange?",C.dark);
+      else caption("About 1 test in 20 rejects H₀, even though green jelly beans do nothing.",C.orange);
+      if(!N)explain("Nothing has run yet. Click <b>Run 1 test</b>: 50 people eat green jelly beans, 50 don't, and we compute t for the difference in acne.");
+      else explain("Test #"+N+": t = <b>"+lt.toFixed(2)+"</b>. "+(Math.abs(lt)>1.96?"That is past &plusmn;1.96, so the test <b>rejects H&#8320;</b>. But green jelly beans do nothing, so this is a <b>false alarm</b> (a Type I error).":"That is inside &plusmn;1.96, so the test <b>fails to reject H&#8320;</b>. Correct: green jelly beans do nothing.")+
+        "<br><br>So far: H&#8320; rejected in <b>"+rej+" of "+N+"</b> tests ("+pct(rej/N)+")."+(N>=100?" Close to 5%: with a 5% significance level, about 1 test in 20 is a false alarm when nothing is going on.":" Keep running; the share settles near 5%.")+
+        "<br><br>Now imagine testing 20 colors at once. Click <b>20 jelly beans</b>.");}
+    refresh();
+    button("1 jelly bean",()=>{S3.mode="one";show(2);},true);
+    button("20 jelly beans",()=>{S3.mode="twenty";show(2);});
+    button("Run 1 test",()=>{add();refresh();});
+    button("Run 10 tests",()=>{queue+=10;});
+    button("Run 100 tests",()=>{queue+=100;});
+    button("Reset",()=>{show(2);});
+    S3.frame=function(dt){if(queue>0){const k=Math.min(queue,queue>20?5:1);for(let i=0;i<k;i++)add();queue-=k;refresh();}
+      const a=ez(dt,0.2);bars.forEach(b=>{b.c+=(b.t-b.c)*a;b.r.setAttribute("y",Y1-b.c);b.r.setAttribute("height",b.c);});};
+    return;
+  }
+  header("Test 20 jelly beans. None of them does anything.","Simulation. For each color: 50 people eat it, 50 don't, compare acne. The truth: no effect at all.",3);
+  const cols=["#7C3AED","#2563EB","#0891B2","#059669","#65A30D","#CA8A04","#EA580C","#DC2626","#DB2777","#9333EA","#4F46E5","#0284C7","#0D9488","#16A34A","#84CC16","#EAB308","#F97316","#EF4444","#EC4899","#A855F7"];
+  const names=["purple","blue","teal","green","lime","gold","orange","red","pink","violet","indigo","sky","aqua","forest","olive","yellow","tangerine","crimson","rose","lilac"];
+  const X0=110,W=1380,Y0=330,Y1=640,bw=W/20;const sy=t=>((Y0+Y1)/2)-t/3.5*((Y1-Y0)/2);
+  el("line",{x1:X0,y1:sy(0),x2:X0+W,y2:sy(0),stroke:C.grey,"stroke-width":2});
+  [1.96,-1.96].forEach(v=>{el("line",{x1:X0,y1:sy(v),x2:X0+W,y2:sy(v),stroke:C.orange,"stroke-width":2,"stroke-dasharray":"8 6"});txt(X0-10,sy(v)+6,(v>0?"+":"−")+"1.96",{"text-anchor":"end","font-size":18,fill:C.orange});});
+  txt(X0-10,sy(0)+6,"t = 0",{"text-anchor":"end","font-size":18,fill:C.grey});
+  const beans=[];for(let i=0;i<20;i++){const x=X0+bw*i+bw/2;
+    el("ellipse",{cx:x,cy:200,rx:18,ry:26,fill:cols[i],transform:`rotate(-20 ${x} 200)`});
+    txt(x,248,names[i],{"text-anchor":"middle","font-size":13,fill:C.grey});
+    beans.push({x,bar:el("rect",{x:x-bw*0.3,width:bw*0.6,y:sy(0),height:0,fill:cols[i],"fill-opacity":0.5}),star:txt(x,0,"",{"text-anchor":"middle","font-size":19,"font-weight":700,fill:C.orange}),c:0,t:0});}
+  const cnt=txt(800,710,"",{"text-anchor":"middle","font-size":23,"font-weight":600,fill:C.dark});
+  const cnt2=txt(800,745,"",{"text-anchor":"middle","font-size":23,"font-weight":700,fill:C.orange});
+  makeCaption();
+  setInfo({study:"Based on xkcd comic 882, “Significant.” Now scientists test all 20 colors: for each color, 50 people eat it and 50 don't, and the two groups' acne is compared with a t-statistic.",
+    todo:"No color does anything: H&#8320; is true for all 20. Click <b>Run 20 tests</b> a few times, then <b>Run 10 rounds</b>.",
+    look:"Each test still has a 5% false-alarm rate, so about 1 color in 20 crosses &plusmn;1.96 per round. But the chance that <b>at least one</b> color looks “significant” in a round is much bigger: 1 &minus; 0.95<sup>20</sup> = 64%."});
+  explain("Nothing has run yet. Click <b>Run 20 tests</b>: one test per color.");
+  let runs=0,tests=0,hits=0,anyR=0;
+  function run(){runs++;let k=0;beans.forEach(b=>{b.t=test();if(Math.abs(b.t)>1.96)k++;});
+    tests+=20;hits+=k;if(k>0)anyR++;
+    beans.forEach(b=>b.star.textContent=Math.abs(b.t)>1.96?"p < 0.05!":"");
+    cnt.textContent="this round: "+k+" of 20 “significant”   ·   all tests: "+hits+" of "+tests+" ("+pct(hits/tests)+")";
+    cnt2.textContent="rounds with at least one “significant” color: "+anyR+" of "+runs+" ("+pct(anyR/runs,0)+")   ·   the math: 64%";
+    const sig=beans.map((b,i)=>Math.abs(b.t)>1.96?names[i]:null).filter(Boolean);
+    caption(sig.length?("Headline: “"+sig[0][0].toUpperCase()+sig[0].slice(1)+" jelly beans linked to acne!” But nothing is going on."):"No false alarms this round. Run again.",sig.length?C.orange:C.blue);
+    explain((sig.length?"This round, <b>"+sig.length+" of 20</b> colors came out “significant” ("+sig.join(", ")+"). None of them does anything, so each is a <b>false alarm</b>.":"This round, no color crossed &plusmn;1.96. No false alarms, by luck.")+
+      "<br><br><b>Per test</b>: "+hits+" of "+tests+" ("+pct(hits/tests)+") were “significant,” still about 5%, just like the single green bean."+
+      "<br><b>Per round of 20</b>: "+anyR+" of "+runs+" rounds ("+pct(anyR/runs,0)+") had at least one “significant” color. The math says 1 &minus; 0.95<sup>20</sup> = 64%."+
+      "<br><br>Lesson: test enough things and a false alarm is more likely than not. Always ask how many tests were run.");}
+  caption("Press “Run 20 tests”. Bars: each color's t-statistic.");
+  button("1 jelly bean",()=>{S3.mode="one";show(2);});
+  button("20 jelly beans",()=>{S3.mode="twenty";show(2);},true);
+  button("Run 20 tests",()=>run());
+  button("Run 10 rounds",()=>{for(let i=0;i<10;i++)run();});
+  button("Reset",()=>{show(2);});
+  S3.frame=function(dt){const a=ez(dt,0.25);beans.forEach(b=>{b.c+=(b.t-b.c)*a;const y=sy(Math.max(-3.5,Math.min(3.5,b.c)));b.bar.setAttribute("y",Math.min(y,sy(0)));b.bar.setAttribute("height",Math.abs(y-sy(0)));
+    b.bar.setAttribute("fill-opacity",Math.abs(b.t)>1.96?0.95:0.35);b.star.setAttribute("y",b.c>0?y-10:y+26);});};
+};
+
+/* =====================================================================
+   SCENE 4: Type I and Type II errors
+   ===================================================================== */
+const S4={};
+S4.build=function(){
+  header("Two ways to be wrong","A drug trial. Left bell: where t lands if the drug does nothing. Right bell: if the drug works.",4);
+  const X0=120,X1=1480,Y1=620,H=380,L0=-4.5,L1=8;const sx=z=>X0+(z-L0)/(L1-L0)*(X1-X0),sy=y=>Y1-y/0.4*H;
+  el("line",{x1:X0,y1:Y1,x2:X1,y2:Y1,stroke:C.grey,"stroke-width":2});
+  for(let z=-4;z<=8;z+=2)txt(sx(z),Y1+30,z,{"text-anchor":"middle","font-size":18,fill:C.grey});
+  txt((X0+X1)/2,Y1+64,"t-statistic",{"text-anchor":"middle","font-size":21});
+  const t1L=el("path",{fill:C.orange,"fill-opacity":0.7}),t1R=el("path",{fill:C.orange,"fill-opacity":0.7}),t2=el("path",{fill:C.soft,"fill-opacity":0.45});
+  const c0=el("path",{fill:"none",stroke:C.dark,"stroke-width":4}),c1=el("path",{fill:"none",stroke:C.blue,"stroke-width":4});
+  let d="";for(let i=0;i<=300;i++){const z=L0+i*(L1-L0)/300;d+=(i?"L":"M")+sx(z)+","+sy(dnorm(z));}c0.setAttribute("d",d);
+  const lab0=txt(sx(0),Y1-H-14,"drug does nothing (H₀ true)",{"text-anchor":"middle","font-size":20,"font-weight":700,fill:C.dark});
+  const lab1=txt(0,Y1-H-14,"drug works (H₀ false)",{"text-anchor":"middle","font-size":20,"font-weight":700,fill:C.blue});
+  const cl=[el("line",{y1:Y1-H+20,y2:Y1,stroke:C.orange,"stroke-width":3,"stroke-dasharray":"8 6"}),el("line",{y1:Y1-H+20,y2:Y1,stroke:C.orange,"stroke-width":3,"stroke-dasharray":"8 6"})];
+  const P=X1-20;
+  const e1=txt(P,150,"",{"text-anchor":"end","font-size":24,"font-weight":700,fill:C.orange});
+  const e2=txt(P,186,"",{"text-anchor":"end","font-size":24,"font-weight":700,fill:C.soft});
+  txt(X0,150,"orange: Type I, approve a useless drug",{"font-size":19,fill:C.orange});
+  txt(X0,178,"blue: Type II, miss a drug that works",{"font-size":19,fill:C.soft});
+  makeCaption();
+  setInfo({study:"A drug trial. If the drug does nothing (H&#8320; true), the trial's t lands somewhere in the <b>left bell</b>. If the drug works (H&#8320; false), it lands in the <b>right bell</b>. We reject H&#8320; and approve the drug when |t| is past the cutoff.",
+    todo:"Drag the <b>cutoff</b> slider (or click 5% / 1%). Then drag the <b>patients</b> slider.",
+    look:"<b>Orange</b>: the useless drug's t lands past the cutoff, so we approve it (Type I, false alarm). <b>Blue</b>: the good drug's t lands inside, so we miss it (Type II). Watch one shrink as the other grows, and both shrink with more patients."});
+  let c=1.96,n=100,cc=1.96,dd=2.5;
+  const delta=()=>2.5*Math.sqrt(n/100);
+  function area(a,b,mu){let s="M"+sx(a)+","+Y1;for(let i=0;i<=120;i++){const z=a+(b-a)*i/120;s+="L"+sx(z)+","+sy(dnorm(z-mu));}return s+"L"+sx(b)+","+Y1+"Z";}
+  const sc=slider("Cutoff for |t|",1,3.5,1.96,0.01,v=>{c=v;bc.forEach(b=>b.classList.remove("on"));});
+  const bc=[button("5% level: 1.96",()=>{c=1.96;sc.value=1.96;},true),button("1% level: 2.58",()=>{c=2.58;sc.value=2.58;})];group(bc);
+  slider("Patients in the trial",25,400,100,1,v=>{n=v;});
+  S4.frame=function(dt){const a=ez(dt,0.3);cc+=(c-cc)*a;dd+=(delta()-dd)*a;
+    let s="";for(let i=0;i<=300;i++){const z=L0+i*(L1-L0)/300;s+=(i?"L":"M")+sx(z)+","+sy(dnorm(z-dd));}c1.setAttribute("d",s);lab1.setAttribute("x",sx(Math.min(dd,6.5)));
+    t1L.setAttribute("d",area(L0,-cc,0));t1R.setAttribute("d",area(cc,L1,0));t2.setAttribute("d",area(-cc,cc,dd));
+    cl[0].setAttribute("x1",sx(-cc));cl[0].setAttribute("x2",sx(-cc));cl[1].setAttribute("x1",sx(cc));cl[1].setAttribute("x2",sx(cc));
+    const ty1=2*(1-Phi(c)),ty2=Phi(c-delta())-Phi(-c-delta());
+    e1.textContent="Type I: "+(100*ty1).toFixed(1)+"%";e2.textContent="Type II: "+(100*ty2).toFixed(1)+"%";
+    if(c>2.3)caption("Stricter cutoff: fewer useless drugs approved, but more good drugs missed.",C.dark);
+    else if(n>150)caption("A bigger trial pulls the bells apart: fewer of both errors.",C.blue);
+    else if(c<1.7)caption("Looser cutoff: fewer good drugs missed, but more useless drugs approved.",C.orange);
+    else caption("Move the cutoff, or add patients. Watch the two errors.",C.dark);
+    explain("Cutoff: reject H&#8320; if |t| &gt; <b>"+c.toFixed(2)+"</b> (a "+pct(ty1,1)+" significance level). Trial size: <b>"+n+"</b> patients.<br><br>"+
+      "<b>Type I, "+pct(ty1)+"</b>: the chance a useless drug's t lands past the cutoff and gets approved (orange).<br>"+
+      "<b>Type II, "+pct(ty2)+"</b>: the chance a drug that works lands inside the cutoff and gets rejected (blue).<br><br>"+
+      (c>2.3?"A strict cutoff protects against approving useless drugs, at the price of missing more good ones.":c<1.7?"A loose cutoff misses fewer good drugs, at the price of approving more useless ones.":"At the usual 5% level.")+
+      (n>150?" With "+n+" patients the right bell sits far from 0, so both errors stay small: more data is the only way to cut both.":" More patients would push the right bell away from 0 and shrink the blue area."));};
+};
+
+/* ===================================================================== */
+const SCENES=[S1,S2,S3];let cur=0,last=performance.now();
+function show(i){cur=(i+SCENES.length)%SCENES.length;svg.innerHTML="";ctl.innerHTML="";capEl=null;SCENES[cur].frame=null;SCENES[cur].build();}
+function loop(t){const dt=Math.min(0.1,(t-last)/1000);last=t;if(SCENES[cur].frame)SCENES[cur].frame(dt);requestAnimationFrame(loop);}
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;if(e.key==="ArrowRight")show(cur+1);else if(e.key==="ArrowLeft")show(cur-1);else if(e.key==="i"||e.key==="I")toggleInfo();else if(e.key==="f"||e.key==="F"){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}});
+show(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Omitted Variable Bias</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --blue:#0021A5; --soft:#4A6FD4; --orange:#FA4616; --ink:#4B5563; --grey:#9AA1AE; --bg:#FCFCFE; }
+  html,body{margin:0;height:100%;background:var(--bg);font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;overflow:hidden;color:var(--ink)}
+  #stage{position:absolute;inset:0 0 86px 0;display:flex;align-items:center;justify-content:center}
+  svg{width:100vw;height:calc(56.25vw);max-height:calc(100vh - 86px);max-width:calc((100vh - 86px)*1.7778);user-select:none}
+  #controls{position:fixed;left:0;right:0;bottom:30px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;padding:0 16px}
+  #controls button{font:inherit;font-size:15px;padding:7px 14px;border-radius:8px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #controls button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  #controls label{font-size:15px;display:flex;align-items:center;gap:8px}
+  #controls input[type=range]{width:220px;accent-color:var(--orange)}
+  #controls .sep{width:1px;height:26px;background:#D4D8DE;margin:0 4px}
+  #help{position:fixed;left:16px;bottom:6px;font-size:12px;color:var(--grey)}
+  #tip{position:fixed;z-index:6;pointer-events:none;display:none;max-width:320px;background:#fff;border:1.5px solid #D4D8DE;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.12);padding:8px 11px;font-size:15px;line-height:1.4;color:var(--ink)}
+  text{font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif}
+  #infoBtn{position:fixed;top:12px;right:16px;z-index:5;font:inherit;font-size:15px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #infoBtn.on{background:var(--blue);color:#fff}
+  #info{position:fixed;top:56px;right:16px;width:min(400px,90vw);max-height:calc(100vh - 160px);overflow:auto;z-index:4;background:rgba(255,255,255,0.97);border:1.5px solid #D4D8DE;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,0.12);padding:16px 18px;font-size:15px;line-height:1.45;display:none}
+  #info.show{display:block}
+  #info h3{margin:12px 0 4px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:var(--grey)}
+  #info h3:first-child{margin-top:0}
+  #info p{margin:0 0 4px}
+  #info .now{background:#FFF4EF;border-left:4px solid var(--orange);padding:8px 10px;border-radius:6px}
+  @keyframes fadein{from{opacity:0}}
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div id="controls"></div>
+<button id="infoBtn" title="Show or hide the explanation (I)">&#9432; Explain</button>
+<div id="info"><h3>The data</h3><p id="iStudy"></p><h3>What to do</h3><p id="iDo"></p><h3>Look for</h3><p id="iLook"></p><h3>What you are seeing now</h3><p id="iNow" class="now"></p></div>
+<div id="tip"></div>
+<div id="help">&rarr; &larr;: switch animation &nbsp;·&nbsp; F: full screen &nbsp;·&nbsp; I or &#9432;: explanation &nbsp;·&nbsp; use the buttons below the picture &nbsp;·&nbsp; hover over a dot or a bar for its details</div>
+<script>
+/* 88 houses sold in the Boston area in 1990 (Wooldridge, Introductory Econometrics, hprice1).
+   Each row: [sale price in $1000s, bedrooms, size in square feet]. */
+const H=[[300.000,4,2438],[370.000,3,2076],[191.000,3,1374],[195.000,3,1448],[373.000,4,2514],[466.275,5,2754],[332.500,3,2067],[315.000,3,1731],[206.000,3,1767],[240.000,3,1890],[285.000,4,2336],[300.000,5,2634],[405.000,3,3375],[212.000,3,1899],[265.000,3,2312],[227.400,4,1760],[240.000,4,2000],[285.000,3,1774],[268.000,3,1376],[310.000,4,1835],[266.000,3,2048],[270.000,3,2124],[225.000,3,1768],[150.000,4,1732],[247.000,3,1440],[275.000,3,1932],[230.000,3,1932],[343.000,3,2106],[477.500,7,3529],[350.000,4,2051],[230.000,4,1573],[335.000,4,2829],[251.000,3,1630],[235.000,4,1840],[361.000,4,2066],[190.000,4,1702],[360.000,4,2750],[575.000,5,3880],[209.001,4,1854],[225.000,2,1421],[246.000,3,1662],[713.500,5,3331],[248.000,4,1656],[230.000,3,1171],[375.000,5,2293],[265.000,3,1764],[313.000,3,2768],[417.500,4,3733],[253.000,3,1536],[315.000,4,1638],[264.000,3,1972],[255.000,2,1478],[210.000,3,1408],[180.000,3,1812],[250.000,3,1722],[250.000,4,1780],[209.000,4,1674],[258.000,4,1850],[289.000,3,1925],[316.000,4,2343],[225.000,3,1567],[266.000,4,1664],[310.000,6,1386],[471.250,5,2617],[335.000,4,2321],[495.000,4,2638],[279.500,4,1915],[380.000,4,2589],[325.000,4,2709],[220.000,3,1587],[215.000,3,1694],[240.000,3,1536],[725.000,5,3662],[230.000,3,1736],[306.000,2,2205],[425.000,3,1502],[318.000,4,1696],[330.000,3,2186],[246.000,4,1928],[225.000,3,1294],[111.000,4,1535],[268.125,3,1980],[244.000,4,2090],[295.000,3,1837],[236.000,3,1715],[202.500,3,1574],[219.000,2,1185],[242.000,4,1774]];
+const RND=[-1.015009,-0.079637,-0.232987,-0.817268,0.772091,-0.165612,0.972874,1.716534,0.255237,0.366581,1.180789,0.643192,1.295322,0.187918,1.591205,-0.055179,0.838471,0.159370,0.625954,0.633585,0.681028,-0.682033,-0.723257,1.673526,-0.595756,1.159844,0.117422,0.259221,0.382362,-0.711482,-1.177570,-0.960167,-0.878952,-3.556136,-1.416750,-0.448769,-0.775968,-0.831828,0.051830,-0.616551,0.254397,-0.331520,-0.206319,1.215337,1.892056,0.074194,1.751696,-0.231487,0.543452,-0.989001,0.315531,2.442327,0.549693,-0.029243,-0.830783,1.246434,-1.375755,-0.331108,0.980911,2.190771,0.030546,-0.785517,0.325441,-0.880844,0.209326,0.151033,-0.343479,0.905878,0.918955,-0.555987,0.560235,-1.792418,-1.565417,-3.320319,0.154722,-0.364627,-2.433684,0.336464,-0.640453,1.821120,-1.846723,0.641717,1.185525,-0.177688,-1.286126,0.463451,0.880666,0.139422];
+const C={blue:"#0021A5",soft:"#4A6FD4",orange:"#FA4616",ink:"#4B5563",grey:"#9AA1AE",pale:"#E5E7EB",dark:"#1F2937"};
+const NS="http://www.w3.org/2000/svg", svg=document.getElementById("svg"), ctl=document.getElementById("controls");
+function el(tag,a,p){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e;}
+function txt(x,y,s,a,p){const e=el("text",Object.assign({x,y,"font-size":22,fill:C.ink},a||{}),p);e.textContent=s;return e;}
+const HALO={stroke:"#fff","stroke-width":5,"paint-order":"stroke","stroke-linejoin":"round"};
+function ez(dt,tau){return 1-Math.exp(-dt/tau);}
+function ease(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function normal(r){let u=0,v=0;while(u===0)u=r();v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function header(t,s,n){txt(70,70,t,{"font-size":38,"font-weight":700,fill:C.blue});txt(70,108,s,{"font-size":22,fill:C.ink});txt(1530,70,"Animation "+n+" of 2",{"font-size":18,fill:C.grey,"text-anchor":"end"});}
+const tipEl=document.getElementById("tip");
+function showTip(e,h){tipEl.innerHTML=h;tipEl.style.display="block";tipEl.style.left=Math.min(e.clientX+16,window.innerWidth-340)+"px";tipEl.style.top=Math.min(e.clientY+16,window.innerHeight-170)+"px";}
+function hideTip(){tipEl.style.display="none";}
+function hoverTip(node,fn){node.style.cursor="help";node.addEventListener("mousemove",e=>showTip(e,fn()));node.addEventListener("mouseleave",hideTip);}
+let capEl=null;function caption(s,col){if(!capEl)return;capEl.textContent=s;capEl.setAttribute("fill",col||C.dark);}
+function makeCaption(y){capEl=txt(800,y||862,"",{"font-size":26,"text-anchor":"middle","font-weight":600});}
+function button(label,fn,on){const b=document.createElement("button");b.textContent=label;if(on)b.classList.add("on");b.onclick=()=>fn(b);ctl.appendChild(b);return b;}
+function group(btns){btns.forEach(b=>b.addEventListener("click",()=>{btns.forEach(x=>x.classList.remove("on"));b.classList.add("on");}));}
+function sep(){const s=document.createElement("span");s.className="sep";ctl.appendChild(s);}
+function slider(label,min,max,val,step,fn){const l=document.createElement("label");l.textContent=label;const r=document.createElement("input");r.type="range";r.min=min;r.max=max;r.value=val;r.step=step;r.oninput=()=>fn(+r.value);l.appendChild(r);ctl.appendChild(l);return r;}
+const infoEl=document.getElementById("info"),infoBtn=document.getElementById("infoBtn");
+function toggleInfo(){infoEl.classList.toggle("show");infoBtn.classList.toggle("on");}
+infoBtn.onclick=toggleInfo;
+function setInfo(o){document.getElementById("iStudy").innerHTML=o.study;document.getElementById("iDo").innerHTML=o.todo;document.getElementById("iLook").innerHTML=o.look;lastNow="";}
+let lastNow="";function explain(h){if(h===lastNow)return;lastNow=h;document.getElementById("iNow").innerHTML=h;}
+// colour by size: soft blue (1,200 sq ft) to orange (3,000 sq ft or more)
+const SOFT=[74,111,212],ORNG=[250,70,22];
+function sizeRGB(q){const t=Math.min(1,Math.max(0,(q-1200)/1800));return SOFT.map((v,i)=>v+(ORNG[i]-v)*t);}
+function rgb(a){return "rgb("+a.map(Math.round).join(",")+")";}
+function sizeColor(q){return rgb(sizeRGB(q));}
+// OLS by the normal equations (columns of X include the intercept)
+function ols(X,y){const k=X.length,n=y.length;const A=[...Array(k)].map(()=>Array(k+1).fill(0));
+  for(let a=0;a<k;a++){for(let b=0;b<k;b++){let s=0;for(let i=0;i<n;i++)s+=X[a][i]*X[b][i];A[a][b]=s;}let s=0;for(let i=0;i<n;i++)s+=X[a][i]*y[i];A[a][k]=s;}
+  for(let c=0;c<k;c++){let p=c;for(let r=c+1;r<k;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;[A[c],A[p]]=[A[p],A[c]];
+    for(let r=0;r<k;r++)if(r!==c){const f=A[r][c]/A[c][c];for(let q=c;q<=k;q++)A[r][q]-=f*A[c][q];}}
+  const beta=A.map((r,i)=>r[k]/r[i]);const fit=y.map((_,i)=>beta.reduce((s,bb,a)=>s+bb*X[a][i],0));return {beta,fit};}
+const N=H.length, PR=H.map(h=>h[0]), BD=H.map(h=>h[1]), SQ=H.map(h=>h[2]);
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const ONE=Array(N).fill(1), YBAR=mean(PR), BBAR=mean(BD);
+const M1=ols([ONE,BD],PR), M2=ols([ONE,BD,SQ],PR);
+const f1=(v,d)=>v.toFixed(d===undefined?1:d);
+const sgn=(v,d)=>(v>=0?"+":"−")+Math.abs(v).toFixed(d===undefined?1:d);
+function fmtInt(v){return Math.round(v).toLocaleString("en-US");}
+function money(p){return "$"+fmtInt(p*1000);}
+function kk(p){return "$"+Math.round(p)+"k";}
+function houseTip(i){return "<b>House "+(i+1)+"</b><br>"+BD[i]+" bedrooms, "+fmtInt(SQ[i])+" sq ft<br>sold for "+money(PR[i]);}
+// a house icon one unit wide, centred near (0,0)
+const HOUSE="M-0.62,0.03 L0,-0.5 L0.62,0.03 Z M-0.47,0 L0.47,0 L0.47,0.52 L-0.47,0.52 Z", DOOR="M-0.09,0.52 L-0.09,0.27 L0.09,0.27 L0.09,0.52 Z";
+
+/* =====================================================================
+   NOT SHOWN since Nov 2: where the $62,000 comes from (houses)
+   ===================================================================== */
+const S0={};
+S0.build=function(){
+  header("Where the $62,000 comes from","88 houses sold in the Boston area, 1990. Size is omitted from the regression of price on bedrooms.",1);
+  setInfo({study:"88 houses sold in the Boston area in 1990. Each dot is one house: across is its number of bedrooms (spread a little so the dots do not overlap), up is its sale price or its size. Colour shows size: blue for small houses, orange for big ones. Prices are in $1000s.",
+    todo:"Click the four steps in order. Hover over a house for its details, and over the bar pieces on the right.",
+    look:"Step 1: the simple regression says +62.0 per bedroom. Step 2: houses with more bedrooms are bigger, about 365 sq ft per bedroom. Step 3: holding size constant, the slope is only 15.2. Step 4: the gap, 46.7, is the size slope (0.128) times 365: the estimated omitted variable bias."});
+  const AUX=ols([ONE,BD],SQ);
+  const b1=M1.beta[1],c1=M2.beta[1],c2=M2.beta[2],d1=AUX.beta[1],SQBAR=mean(SQ);
+  // the split uses the rounded numbers shown on the slide: 0.128 x 365 = 46.7
+  const C1r=+c1.toFixed(1),C2r=+c2.toFixed(3),D1r=Math.round(d1),BIAS=+(C2r*D1r).toFixed(1);
+  const X0=150,X1=880,Y0=740,Y1=180;
+  const bx=v=>X0+(v-1.4)/(7.6-1.4)*(X1-X0);
+  const yP=v=>Y0-(v-100)/(750-100)*(Y0-Y1), yS=v=>Y0-(v-1000)/(4000-1000)*(Y0-Y1);
+  const JIT=H.map((h,i)=>((i*37)%9-4)*0.055);
+  const gAx=el("g",{});
+  el("line",{x1:X0,y1:Y0,x2:X1,y2:Y0,stroke:C.grey,"stroke-width":2},gAx);el("line",{x1:X0,y1:Y0,x2:X0,y2:Y1,stroke:C.grey,"stroke-width":2},gAx);
+  [2,3,4,5,6,7].forEach(b=>txt(bx(b),Y0+28,String(b),{"font-size":17,fill:C.grey,"text-anchor":"middle"},gAx));
+  txt((X0+X1)/2,Y0+62,"bedrooms",{"font-size":20,"text-anchor":"middle"},gAx);
+  const gYP=el("g",{}),gYS=el("g",{});
+  [200,300,400,500,600,700].forEach(v=>txt(X0-10,yP(v)+6,"$"+v+"k",{"font-size":16,fill:C.grey,"text-anchor":"end"},gYP));
+  [1500,2000,2500,3000,3500].forEach(v=>txt(X0-10,yS(v)+6,fmtInt(v),{"font-size":16,fill:C.grey,"text-anchor":"end"},gYS));
+  const yl=(s,g)=>txt(X0-82,(Y0+Y1)/2,s,{"font-size":20,"text-anchor":"middle",transform:"rotate(-90 "+(X0-82)+" "+(Y0+Y1)/2+")"},g);
+  yl("sale price",gYP);yl("size (sq ft)",gYS);
+  const lA=el("line",{stroke:C.dark,"stroke-width":3}),lB=el("line",{stroke:C.dark,"stroke-width":3}),lC=el("line",{stroke:C.blue,"stroke-width":4});
+  const tA=txt(0,0,"",{"font-size":20,"font-weight":700,fill:C.dark}),tB=txt(0,0,"",{"font-size":20,"font-weight":700,fill:C.dark}),tC=txt(0,0,"",{"font-size":20,"font-weight":700,fill:C.blue});
+  [tA,tB,tC].forEach(t=>Object.entries(HALO).forEach(([k,v])=>t.setAttribute(k,v)));
+  const gP=el("g",{});
+  const pts=H.map((h,i)=>{const c=el("circle",{r:6.5,fill:sizeColor(SQ[i]),"fill-opacity":0.8,stroke:"#fff","stroke-width":1},gP);hoverTip(c,()=>houseTip(i));return c;});
+  // right panel: the decomposition
+  const RX=990,gR=el("g",{});
+  el("rect",{x:RX-20,y:160,width:590,height:560,rx:12,fill:"#fff",stroke:"#D4D8DE","stroke-width":1.5},gR);
+  txt(RX,200,"Split the simple slope",{"font-size":22,"font-weight":700,fill:C.blue},gR);
+  const lines=[
+    {s:"simple slope (price on bedrooms): "+f1(b1),y:250},
+    {s:"extra size per bedroom: "+fmtInt(d1)+" sq ft",y:295},
+    {s:"slope holding size constant: "+f1(c1),y:340},
+    {s:"size slope (per sq ft, $1000s): "+c2.toFixed(3),y:385},
+    {s:"estimated bias = "+C2r.toFixed(3)+" × "+D1r+" = "+f1(BIAS),y:445},
+    {s:f1(C1r)+" + "+f1(BIAS)+" = "+f1(C1r+BIAS)+", about the simple slope "+f1(b1),y:490}];
+  const LT=lines.map(L=>txt(RX,L.y,L.s,{"font-size":20,fill:C.ink},gR));
+  LT.forEach(t=>{t.style.transition="opacity .5s";t.style.opacity=0;});
+  const BW=520,sc=BW/b1;
+  const barC=el("rect",{x:RX,y:560,width:0,height:46,rx:4,fill:C.blue},gR),barB=el("rect",{x:RX,y:560,width:0,height:46,rx:4,fill:C.orange},gR);
+  const vC=txt(RX,591,"",{"font-size":19,fill:"#fff","font-weight":700,"text-anchor":"middle"},gR),vB=txt(RX,591,"",{"font-size":19,fill:"#fff","font-weight":700,"text-anchor":"middle"},gR);
+  const nC=txt(RX,640,"a bedroom",{"font-size":17,fill:C.blue},gR),nB=txt(RX,640,"the extra space that comes with it",{"font-size":17,fill:C.orange},gR);
+  hoverTip(barC,()=>"<b>Slope holding size constant</b><br>"+f1(c1)+" ($1000s per bedroom)");
+  hoverTip(barB,()=>"<b>Estimated omitted variable bias</b><br>size slope × extra size per bedroom<br>= "+C2r.toFixed(3)+" × "+D1r+" = "+f1(BIAS));
+  const st={step:1,v:0,tv:0,a:1,ta:1,b:0,tb:0,c:0,tc:0,bar:0,tbar:0};
+  makeCaption();
+  function go(n){st.step=n;st.tv=n===2?1:0;st.ta=n===2?0:(n>=3?0.25:1);st.tb=n===2?1:0;st.tc=n>=3?1:0;st.tbar=n>=4?1:0;
+    const vis=[[0],[0,1],[0,1,2,3],[0,1,2,3,4,5]][n-1];LT.forEach((t,k)=>t.style.opacity=vis.includes(k)?1:0);
+    LT.forEach((t,k)=>{t.setAttribute("fill",(n===4&&k>=4)?C.orange:C.ink);t.setAttribute("font-weight",(n===4&&k>=4)?700:400);});}
+  const sb=[button("1 · Price on bedrooms",()=>go(1),true),button("2 · Size on bedrooms",()=>go(2)),button("3 · Hold size constant",()=>go(3)),button("4 · Split the 62.0",()=>go(4))];group(sb);
+  function setLine(l,t,f,yf,lab,op,pos){l.setAttribute("x1",bx(1.6));l.setAttribute("y1",yf(f(1.6)));l.setAttribute("x2",bx(7.4));l.setAttribute("y2",yf(f(7.4)));l.style.opacity=op.toFixed(3);
+    t.textContent=lab;t.setAttribute("x",bx(pos)+12);t.setAttribute("y",yf(f(pos))-14);t.style.opacity=op.toFixed(3);}
+  S0.frame=function(dt){
+    const k=ez(dt,0.38);["v","a","b","c","bar"].forEach(q=>st[q]+=(st["t"+q]-st[q])*k);
+    const e=ease(Math.min(1,Math.max(0,st.v)));
+    gYP.style.opacity=(1-e).toFixed(3);gYS.style.opacity=e.toFixed(3);
+    pts.forEach((c,i)=>{c.setAttribute("cx",bx(BD[i]+JIT[i]));c.setAttribute("cy",yP(PR[i])+(yS(SQ[i])-yP(PR[i]))*e);});
+    setLine(lA,tA,b=>M1.beta[0]+b1*b,yP,"slope +"+f1(b1),st.a*(1-e),6.3);
+    setLine(lB,tB,b=>AUX.beta[0]+d1*b,yS,"+"+fmtInt(d1)+" sq ft per bedroom",st.b*e,5.0);
+    setLine(lC,tC,b=>M2.beta[0]+c1*b+c2*SQBAR,yP,"holding size constant: +"+f1(c1),st.c*(1-e),5.4);
+    const wC=C1r*sc*st.bar,wB=BIAS*sc*st.bar;
+    barC.setAttribute("width",Math.max(0,wC));barB.setAttribute("x",RX+wC);barB.setAttribute("width",Math.max(0,wB));
+    vC.setAttribute("x",RX+wC/2);vC.textContent=st.bar>0.6?f1(C1r):"";vB.setAttribute("x",RX+wC+wB/2);vB.textContent=st.bar>0.6?f1(BIAS):"";
+    nC.style.opacity=nB.style.opacity=st.bar.toFixed(3);nB.setAttribute("x",RX+wC+8);
+    const s=st.step;
+    if(s===1){caption("Price on bedrooms: +$62,000 per bedroom.");explain("The simple regression of price on bedrooms. The line rises $62,000 per bedroom. But the dots turn orange as you move right: houses with more bedrooms are bigger.");}
+    if(s===2){caption("Houses with more bedrooms are bigger: about 365 sq ft per bedroom.");explain("The dots move: up is now size, not price. The regression of size on bedrooms rises about 365 sq ft per bedroom. Size is correlated with bedrooms: condition 2 for omitted variable bias.");}
+    if(s===3){caption("Holding size constant: +$15,200 per bedroom.",C.blue);explain("The blue line is the multiple regression slope on bedrooms, drawn at the average size: +15.2. The grey line is the old +62.0. Size also raises price (0.128 per sq ft, holding bedrooms constant): condition 1.");}
+    if(s===4){caption("62.0 = 15.2 + 0.128 × 365: the estimated bias is about 46.7.",C.orange);explain("Each extra bedroom comes with about 365 more sq ft, and each sq ft is associated with $128 more. So 0.128 × 365 = 46.7 of the 62.0 is the extra space, not the bedroom. That 46.7 is our estimate of the omitted variable bias.");}
+  };
+  go(1);
+};
+
+/* =====================================================================
+   ANIMATION 1: the sign of the bias (simulated students)
+   ===================================================================== */
+const S1={};
+S1.build=function(){
+  header("The sign of the bias","Illustration: 200 simulated students. Music has no effect on scores here; academic strength does.",1);
+  setInfo({study:"Simulated data, not real students. Each dot is a student: across is the number of optional music courses taken, up is the test score. Dark dots are academically stronger students, pale dots weaker ones. In these data music has no effect at all; only academic strength moves scores.",
+    todo:"Move the two sliders, or click a preset. The first slider sets how much academic strength raises (or lowers) scores. The second sets how strongly academic strength is correlated with taking music. Hover over the lines and the table cells.",
+    look:"The dashed line is the true effect of music: zero. The orange line is the simple regression of score on music. It tilts up when the two signs agree and down when they differ. When either knob is at 0, the two lines coincide: no bias."});
+  const n=200,r=rng(7);let Z=[],E1=[],E2=[];for(let i=0;i<n;i++){Z.push(normal(r));E1.push(normal(r));E2.push(normal(r));}
+  const ONEn=Array(n).fill(1);
+  // make the draws exactly uncorrelated in this sample, so a knob at 0 gives exactly no bias
+  const std=v=>{const m=mean(v),s=Math.sqrt(mean(v.map(x=>(x-m)**2)));return v.map(x=>(x-m)/s);};
+  const res=(y,cols)=>{const f=ols([ONEn,...cols],y).fit;return y.map((v,i)=>v-f[i]);};
+  Z=std(Z);E1=std(res(E1,[Z]));E2=std(res(E2,[Z,E1]));
+  const st={g:30,rho:0.6};
+  function sim(g,rho){const X=Z.map((z,i)=>2+0.8*(rho*z+Math.sqrt(1-rho*rho)*E1[i])),Y=Z.map((z,i)=>500+g*z+25*E2[i]);
+    const s=ols([ONEn,X],Y),m=ols([ONEn,X,Z],Y),a=ols([ONEn,X],Z);return {X,Y,b:s.beta[1],a0:s.beta[0],c1:m.beta[1],c2:m.beta[2],d:a.beta[1],ybar:mean(Y),xbar:mean(X)};}
+  let tgt=sim(st.g,st.rho),cur={X:tgt.X.slice(),Y:tgt.Y.slice(),b:tgt.b,a0:tgt.a0,c1:tgt.c1,c2:tgt.c2,d:tgt.d,ybar:tgt.ybar,xbar:tgt.xbar};
+  const X0=150,X1=860,Y0=740,Y1=180,px=v=>X0+(v+0.5)/5.5*(X1-X0),py=v=>Y0-(v-340)/(660-340)*(Y0-Y1);
+  const gAx=el("g",{});
+  el("line",{x1:X0,y1:Y0,x2:X1,y2:Y0,stroke:C.grey,"stroke-width":2},gAx);el("line",{x1:X0,y1:Y0,x2:X0,y2:Y1,stroke:C.grey,"stroke-width":2},gAx);
+  [0,1,2,3,4].forEach(v=>txt(px(v),Y0+28,String(v),{"font-size":17,fill:C.grey,"text-anchor":"middle"},gAx));
+  [400,450,500,550,600].forEach(v=>txt(X0-10,py(v)+6,String(v),{"font-size":16,fill:C.grey,"text-anchor":"end"},gAx));
+  txt((X0+X1)/2,Y0+62,"music courses taken",{"font-size":20,"text-anchor":"middle"},gAx);
+  txt(X0-70,(Y0+Y1)/2,"test score",{"font-size":20,"text-anchor":"middle",transform:"rotate(-90 "+(X0-70)+" "+(Y0+Y1)/2+")"},gAx);
+  const clip=el("clipPath",{id:"pl"});el("rect",{x:X0,y:Y1-20,width:X1-X0,height:Y0-Y1+20},clip);
+  const gP=el("g",{"clip-path":"url(#pl)"});
+  const pts=Z.map((z,i)=>{const t=Math.min(1,Math.max(0,(z+2)/4));const c=el("circle",{r:5.5,fill:rgb([229-(229-0)*t,231-(231-33)*t,235-(235-165)*t]),"fill-opacity":0.85,stroke:"#fff","stroke-width":0.8},gP);
+    hoverTip(c,()=>"<b>Student "+(i+1)+"</b><br>academic strength: "+sgn(z,2)+" SD<br>music courses: "+f1(cur.X[i])+"<br>test score: "+Math.round(cur.Y[i]));return c;});
+  const lT=el("line",{stroke:C.ink,"stroke-width":3,"stroke-dasharray":"10 7"},gP),lS=el("line",{stroke:C.orange,"stroke-width":4.5},gP);
+  hoverTip(lT,()=>"<b>True effect of music</b>: 0<br>(music does nothing in these data)");
+  hoverTip(lS,()=>"<b>Simple regression of score on music</b><br>slope "+sgn(cur.b)+" points per course");
+  const tS=txt(0,0,"",{"font-size":20,"font-weight":700,fill:C.orange});Object.entries(HALO).forEach(([k,v])=>tS.setAttribute(k,v));
+  const tT=txt(X1-10,0,"true effect: 0",{"font-size":18,fill:C.ink,"text-anchor":"end"});Object.entries(HALO).forEach(([k,v])=>tT.setAttribute(k,v));
+  // right: sign table and the split
+  const RX=950,gR=el("g",{});
+  txt(RX,190,"bias = (strength → score) × (slope of strength on music)",{"font-size":19,"font-weight":600,fill:C.dark},gR);
+  const cw=270,ch=74,tx=RX+120,ty=250;
+  txt(tx+cw/2,ty-10,"positively correlated",{"font-size":16,fill:C.ink,"text-anchor":"middle"},gR);txt(tx+cw*1.5,ty-10,"negatively correlated",{"font-size":16,fill:C.ink,"text-anchor":"middle"},gR);
+  txt(tx-10,ty+ch/2+6,"raises score",{"font-size":16,fill:C.ink,"text-anchor":"end"},gR);txt(tx-10,ty+ch*1.5+6,"lowers score",{"font-size":16,fill:C.ink,"text-anchor":"end"},gR);
+  const cells=[];[[0,0,"upward ↑",C.orange],[1,0,"downward ↓",C.blue],[0,1,"downward ↓",C.blue],[1,1,"upward ↑",C.orange]].forEach(([c,rw,s,col])=>{
+    const R=el("rect",{x:tx+c*cw,y:ty+rw*ch,width:cw,height:ch,fill:"#fff",stroke:"#D4D8DE","stroke-width":1.5},gR);
+    const T=txt(tx+c*cw+cw/2,ty+rw*ch+ch/2+8,s,{"font-size":22,"font-weight":700,fill:col,"text-anchor":"middle"},gR);
+    hoverTip(R,()=>"Strength "+(rw===0?"raises":"lowers")+" scores and is "+(c===0?"positively":"negatively")+" correlated with music:<br>the simple slope is biased <b>"+(s.split(" ")[0])+"</b>.");cells.push({R,T,c,rw});});
+  const nums=[txt(RX,480,"",{"font-size":19,fill:C.ink},gR),txt(RX,515,"",{"font-size":19,fill:C.ink},gR),txt(RX,550,"",{"font-size":19,fill:C.ink},gR),txt(RX,600,"",{"font-size":22,"font-weight":700,fill:C.orange},gR)];
+  makeCaption();
+  const gS=slider("Academic strength → score",-40,40,st.g,5,v=>{st.g=v;tgt=sim(st.g,st.rho);});
+  const rS=slider("Correlation of strength with music",-0.8,0.8,st.rho,0.1,v=>{st.rho=v;tgt=sim(st.g,st.rho);});
+  sep();
+  [["Mozart: + and +",30,0.6],["− and +",-30,0.6],["No correlation",30,0],["No effect",0,0.6]].forEach(([l,g,rho])=>button(l,()=>{st.g=g;st.rho=rho;gS.value=g;rS.value=rho;tgt=sim(g,rho);}));
+  S1.frame=function(dt){
+    const s0=(v,d)=>sgn(+v.toFixed(d===undefined?1:d)||0,d);
+    const k=ez(dt,0.32);
+    for(let i=0;i<n;i++){cur.X[i]+=(tgt.X[i]-cur.X[i])*k;cur.Y[i]+=(tgt.Y[i]-cur.Y[i])*k;pts[i].setAttribute("cx",px(cur.X[i]));pts[i].setAttribute("cy",py(cur.Y[i]));}
+    ["b","a0","c1","c2","d","ybar","xbar"].forEach(q=>cur[q]+=(tgt[q]-cur[q])*k);
+    const yT=py(cur.ybar);lT.setAttribute("x1",px(-0.4));lT.setAttribute("x2",px(4.9));lT.setAttribute("y1",yT);lT.setAttribute("y2",yT);tT.setAttribute("y",yT+28);
+    const f=x=>cur.a0+cur.b*x;lS.setAttribute("x1",px(-0.4));lS.setAttribute("y1",py(f(-0.4)));lS.setAttribute("x2",px(4.9));lS.setAttribute("y2",py(f(4.9)));
+    tS.textContent="simple slope "+s0(cur.b)+" per course";tS.setAttribute("x",px(3.3));tS.setAttribute("y",py(f(3.3))-(cur.b>=0?18:-34));
+    const g=st.g,rho=st.rho,act=(g===0||Math.abs(rho)<0.05)?null:{c:rho>0?0:1,rw:g>0?0:1};
+    cells.forEach(o=>{const on=act&&o.c===act.c&&o.rw===act.rw;o.R.setAttribute("fill",on?"#FFF4EF":"#fff");o.R.setAttribute("stroke",on?C.orange:"#D4D8DE");o.R.setAttribute("stroke-width",on?3:1.5);});
+    nums[0].textContent="slope holding strength constant: "+s0(cur.c1)+"  (the true effect)";
+    nums[1].textContent="strength → score: "+s0(cur.c2)+" points per SD";
+    nums[2].textContent="slope of strength on music: "+s0(cur.d,3)+" SD per course";
+    nums[3].textContent="bias = "+s0(cur.c2)+" × "+s0(cur.d,3)+" = "+s0(cur.c2*cur.d);
+    if(!act){caption("One knob at zero: no omitted variable bias.",C.dark);explain("When academic strength does not affect scores, or is uncorrelated with music, leaving it out does not bias the slope. The orange line stays on the dashed line (up to chance).");}
+    else{const up=(act.c===act.rw);caption(up?"Same signs: upward bias. Music looks helpful, but it does nothing.":"Opposite signs: downward bias. Music looks harmful, but it does nothing.",up?C.orange:C.blue);
+      explain("Academic strength "+(g>0?"raises":"lowers")+" scores and is "+(rho>0?"positively":"negatively")+" correlated with taking music. Leaving it out, the simple slope picks up its effect: bias = "+s0(cur.c2)+" × "+s0(cur.d,3)+" ≈ "+s0(cur.c2*cur.d)+" points per course, though music's true effect is 0.");}
+  };
+};
+
+/* =====================================================================
+   ANIMATION 2: which way is the bias? ideal experiment, then selection
+   ===================================================================== */
+const VISITED=new Set();
+const S2={};
+S2.build=function(){
+  header("From the ideal experiment to omitted variable bias","Six cases, step by step. Made-up data and made-up numbers, chosen only to show how the bias works.",2);
+  setInfo({study:"Made-up data, not real studies. Each dot is one person or product. Dark means a high value of the omitted variable Z, pale a low value. We do not measure Z exactly here: two groups are enough to show the bias.",
+    todo:"Pick a case and click the six steps in order. Move the slider to increase X, in any step, and watch the mix of people and the numbers.",
+    look:"In the ideal experiment a coin decides X, so both groups are mixed at every X, and the blue slope is the causal effect. With selection, raising X also changes the mix of Z, and Z has its own effect on Y. The orange slope is the causal effect plus that extra piece: the bias."});
+  // col 0: Z and X positively correlated; row 0: Z raises Y. b: causal effect per unit of X. b2: dark minus pale at the same X. sg: sign of the correlation of Z and X
+  const CASES=[
+   {btn:"Education",y:"wages",x:"years of education",z:"ability",hi:"more able",lo:"less able",b:4,b2:32,sg:1,c:0,r:0,ent:"education, wages",
+    zy:"Ability raises wages: at the same education, the more able earn more.",
+    zx:"People choose: more able people get more education, so the dark dots move right.",
+    intu:"People with more education also tend to be more able. Education gets the credit for what ability does, so its coefficient is too high."},
+   {btn:"Home size",y:"home price",x:"home size",z:"distance from downtown",hi:"far out",lo:"close in",b:8,b2:-16,sg:1,c:0,r:1,ent:"home size, price",
+    zy:"Distance lowers price: at the same size, a home farther out sells for less.",
+    zx:"No coin decides this: bigger homes tend to be farther out, so the dark dots move right.",
+    intu:"Bigger homes tend to sit in cheaper locations. Size gets the blame for the location, so its coefficient is too low."},
+   {btn:"Studying",y:"GPA",x:"hours studying",z:"hours at a job",hi:"works more",lo:"works less",b:4,b2:-32,sg:-1,c:1,r:1,ent:"studying, GPA",
+    zy:"Job hours lower GPA: at the same study hours, those who work more have lower GPAs.",
+    zx:"Students choose: those who work more study less, so the dark dots move left.",
+    intu:"Students who study more also work less, and working less helps GPA. Studying gets the credit for that, so its coefficient is too high."},
+   {btn:"Tutoring",y:"exam score",x:"hours of tutoring",z:"prior grades",hi:"better grades",lo:"weaker grades",b:3,b2:32,sg:-1,c:1,r:0,ent:"tutoring, exam score",
+    zy:"Better prior grades raise scores: at the same tutoring, stronger students score higher.",
+    zx:"Students choose: those with weaker grades get more tutoring, so the dark dots move left.",
+    intu:"The students who get tutoring were already behind. Tutoring gets the blame for that, so its coefficient is too low. It can even look harmful."},
+   {btn:"Exercise",y:"lifespan",x:"hours of exercise",z:"smoking",hi:"smokes",lo:"does not smoke",b:4,b2:-32,sg:-1,c:1,r:1,ent:"exercise, lifespan",
+    zy:"Smoking shortens life: at the same exercise, smokers live less long.",
+    zx:"People choose: smokers exercise less, so the dark dots move left.",
+    intu:"People who exercise more also smoke less. Exercise gets the credit for not smoking, so its coefficient is too high."},
+   {btn:"Discounts",y:"units sold",x:"size of discount",z:"popularity",hi:"popular",lo:"not popular",b:8,b2:16,sg:-1,c:1,r:0,ent:"discounts, sales",
+    zy:"Popular products sell more: at the same discount, they sell more units.",
+    zx:"Stores choose: popular products get smaller discounts, so the dark dots move left.",
+    intu:"Deep discounts go to products people were not buying anyway. The discount gets the blame for weak demand, so its coefficient is too low."}];
+  const DELTA=0.25;
+  // half dark, half pale; U is the coin, exactly balanced against Z; noise exactly uncorrelated with both
+  const n=120,r=rng(11),Z=[...Array(n)].map((_,i)=>i%2?1:-1),U=[...Array(n)].map((_,i)=>i%4<2?1:-1);let E1=[],E2=[];for(let i=0;i<n;i++){E1.push(normal(r));E2.push(normal(r));}
+  const ONEn=Array(n).fill(1);
+  const std=v=>{const m=mean(v),s=Math.sqrt(mean(v.map(x=>(x-m)**2)));return v.map(x=>(x-m)/s);};
+  const res=(y,cols)=>{const f=ols([ONEn,...cols],y).fit;return y.map((v,i)=>v-f[i]);};
+  E1=std(res(E1,[Z,U]));E2=std(res(E2,[Z,U,E1]));
+  // Y is shown on a 0 to 100 scale. Var(X) = 3 and Cov(X, dark) = 0.75, so the slope of dark on X is exactly 0.25
+  function sim(c,ideal){const X=Z.map((z,i)=>5+1.5*(ideal?U[i]:c.sg*z)+Math.sqrt(.75)*E1[i]),Y=X.map((x,i)=>50+c.b*(x-5)+c.b2*(Z[i]/2)+4.5*E2[i]);return {X,Y};}
+  const X0=130,X1=860,Y0=740,Y1=180,px=v=>X0+v/10*(X1-X0),py=v=>Y0-v/100*(Y0-Y1);
+  const DARK="rgb(0,33,165)",PALE="rgb(170,188,235)";
+  const gAx=el("g",{});
+  el("line",{x1:X0,y1:Y0,x2:X1,y2:Y0,stroke:C.grey,"stroke-width":2},gAx);el("line",{x1:X0,y1:Y0,x2:X0,y2:Y1,stroke:C.grey,"stroke-width":2},gAx);
+  [1,3,5,7,9].forEach(v=>txt(px(v),Y0+24,String(v),{"font-size":16,fill:C.grey,"text-anchor":"middle"},gAx));
+  [20,40,60,80].forEach(v=>txt(X0-10,py(v)+6,String(v),{"font-size":16,fill:C.grey,"text-anchor":"end"},gAx));
+  const tX=txt((X0+X1)/2,Y0+50,"",{"font-size":19,"text-anchor":"middle"},gAx);
+  const tY=txt(X0-60,(Y0+Y1)/2,"",{"font-size":19,"text-anchor":"middle",transform:"rotate(-90 "+(X0-60)+" "+(Y0+Y1)/2+")"},gAx);
+  const clip=el("clipPath",{id:"pc"});el("rect",{x:X0,y:Y1-20,width:X1-X0,height:Y0-Y1+20},clip);
+  const gP=el("g",{"clip-path":"url(#pc)"});
+  const fade=(e,o)=>{e.style.transition="opacity .5s";e.style.opacity=o;};
+  const pts=Z.map(z=>el("circle",{r:6.5,stroke:"#fff","stroke-width":1,fill:z>0?DARK:PALE},gP));
+  const lHi=el("line",{stroke:DARK,"stroke-width":3,"stroke-dasharray":"11 7"},gP),lLo=el("line",{stroke:"#7F97DB","stroke-width":3,"stroke-dasharray":"11 7"},gP);
+  const lT=el("line",{stroke:C.blue,"stroke-width":4.5},gP),lS=el("line",{stroke:C.orange,"stroke-width":5},gP);
+  const mT=el("circle",{r:10,fill:C.blue,stroke:"#fff","stroke-width":2.5},gP),mS=el("circle",{r:10,fill:C.orange,stroke:"#fff","stroke-width":2.5},gP);
+  const lab=(a)=>{const t=txt(0,0,"",Object.assign({"font-size":18,"font-weight":700},a));Object.entries(HALO).forEach(([k,v])=>t.setAttribute(k,v));return t;};
+  const tHi=lab({fill:DARK}),tLo=lab({fill:"#5F7CCF"}),tT=lab({fill:C.blue}),tS=lab({fill:C.orange});
+  hoverTip(lT,()=>"<b>Causal slope</b>: what the ideal experiment finds");hoverTip(lS,()=>"<b>Simple regression</b>: Y on X, leaving Z out");
+  // the coin, or the choice
+  const gCoin=el("g",{});el("circle",{cx:X0+45,cy:Y1+6,r:24,fill:C.orange},gCoin);txt(X0+45,Y1+15,"$",{"font-size":26,"font-weight":700,fill:"#fff","text-anchor":"middle"},gCoin);
+  const tCoin=lab({"font-size":19,fill:C.ink,x:X0+80,y:Y1+13});
+  // right: the arrow diagram
+  const RX=950,gD=el("g",{});
+  const arrow=(col,p)=>{const g=el("g",{},p),l=el("line",{stroke:col,"stroke-width":4},g),h=el("polygon",{fill:col},g);
+    g.put=(x1,y1,x2,y2)=>{const a=Math.atan2(y2-y1,x2-x1),L=14;l.setAttribute("x1",x1);l.setAttribute("y1",y1);l.setAttribute("x2",x2-L*Math.cos(a));l.setAttribute("y2",y2-L*Math.sin(a));
+      const q=[[x2,y2],[x2-L*Math.cos(a)+7*Math.sin(a),y2-L*Math.sin(a)-7*Math.cos(a)],[x2-L*Math.cos(a)-7*Math.sin(a),y2-L*Math.sin(a)+7*Math.cos(a)]];h.setAttribute("points",q.map(v=>v.join(",")).join(" "));};return g;};
+  const dXY=arrow(C.blue,gD),dZY=arrow(C.orange,gD);dXY.put(RX+270,160,RX+380,186);dZY.put(RX+270,232,RX+380,206);
+  const dZX=el("line",{x1:RX+135,y1:182,x2:RX+135,y2:210,stroke:C.orange,"stroke-width":3,"stroke-dasharray":"6 4"},gD);
+  const box=(x,y,w,col)=>{el("rect",{x,y,width:w,height:44,rx:8,fill:"#fff",stroke:col,"stroke-width":2.5},gD);return txt(x+w/2,y+29,"",{"font-size":18,"font-weight":700,fill:col,"text-anchor":"middle"},gD);};
+  const bX=box(RX,138,270,C.blue),bZ=box(RX,210,270,C.orange),bY=box(RX+380,174,220,C.grey);
+  const sZY=txt(RX+335,246,"",{"font-size":32,"font-weight":700,fill:C.orange,"text-anchor":"middle"},gD),sZX=txt(RX+105,206,"",{"font-size":32,"font-weight":700,fill:C.orange,"text-anchor":"middle"},gD);
+  // right: who is at this X
+  const gI=el("g",{});
+  const tLeg=txt(RX,284,"",{"font-size":17,fill:C.ink},gI);
+  const row=(y)=>{const lb=txt(RX,y+32,"",{"font-size":17,"font-weight":600},gI),t2=txt(RX+540,y+32,"",{"font-size":17,fill:C.ink},gI);const ps=[...Array(10)].map((_,k)=>{const g=el("g",{},gI),x=RX+110+k*41;el("circle",{cx:x,cy:y+11,r:9,class:"p"},g);el("path",{d:"M"+(x-13)+" "+(y+44)+" v-12 a13 13 0 0 1 26 0 v12 z",class:"p"},g);return g;});return {lb,t2,ps};};
+  const r0=row(296),r1=row(350);
+  const paint=(R,x,p)=>{const k=Math.round(p*10);R.lb.textContent="X = "+(+x.toFixed(1));R.t2.textContent=Math.round(p*100)+"%";R.ps.forEach((g,i)=>{const col=i<k?DARK:PALE;[...g.children].forEach(e=>e.setAttribute("fill",col));});};
+  // right: the numbers
+  const gN=el("g",{});
+  const ln=[432,466,500,534].map(y=>txt(RX,y,"",{"font-size":19,fill:C.ink},gN));
+  const bars=[["X itself (ideal)",C.blue,582],["through Z",C.orange,620],["total, Z left out",C.dark,658]].map(([s,col,y])=>{const t=txt(RX,y+21,s,{"font-size":17},gN),R=el("rect",{y,height:28,rx:3,fill:col},gN),v=txt(0,y+21,"",{"font-size":18,"font-weight":700,fill:col},gN);return {t,R,v};});
+  const ZX=RX+290,PX=4;el("line",{x1:ZX,y1:576,x2:ZX,y2:692,stroke:C.grey,"stroke-width":1.5},gN);
+  const tBar=txt(RX,568,"",{"font-size":17,"font-weight":600},gN);
+  // right: the table
+  const tx=RX+110,ty=460,cw=245,ch=108,gT=el("g",{});
+  txt(tx+cw/2,ty-10,"Z, X positively correlated",{"font-size":15,"text-anchor":"middle"},gT);txt(tx+cw*1.5,ty-10,"Z, X negatively correlated",{"font-size":15,"text-anchor":"middle"},gT);
+  txt(tx-10,ty+ch/2,"Z raises Y",{"font-size":16,"text-anchor":"end"},gT);txt(tx-10,ty+ch*1.5,"Z lowers Y",{"font-size":16,"text-anchor":"end"},gT);
+  const cells=[[0,0,"upward ↑",C.orange,"music, test scores"],[1,0,"downward ↓",C.blue,null],[0,1,"downward ↓",C.blue,"treatment, survival"],[1,1,"upward ↑",C.orange,null]].map(([c,rw,s,col,seed])=>{
+    const R=el("rect",{x:tx+c*cw,y:ty+rw*ch,width:cw,height:ch,fill:"#fff",stroke:"#D4D8DE","stroke-width":1.5},gT);
+    txt(tx+c*cw+12,ty+rw*ch+28,s,{"font-size":18,"font-weight":700,fill:col},gT);
+    return {c,rw,seed,R,L:[txt(tx+c*cw+12,ty+rw*ch+58,"",{"font-size":17},gT),txt(tx+c*cw+12,ty+rw*ch+84,"",{"font-size":17},gT)]};});
+  function drawTable(c,on6){cells.forEach(o=>{const on=on6&&o.c===c.c&&o.rw===c.r;o.R.setAttribute("fill",on?"#FFF4EF":"#fff");o.R.setAttribute("stroke",on?C.orange:"#D4D8DE");o.R.setAttribute("stroke-width",on?3:1.5);
+      const items=[];if(o.seed)items.push(o.seed);CASES.forEach(k=>{if(k.c===o.c&&k.r===o.rw&&VISITED.has(k.btn))items.push(k.ent);});
+      o.L.forEach((t,i)=>{t.textContent=items[i]||"";const nw=on6&&items[i]===c.ent;t.setAttribute("fill",nw?C.orange:C.ink);t.setAttribute("font-weight",nw?700:400);});});}
+  const para=txt(800,818,"",{"font-size":19,fill:C.ink,"text-anchor":"middle"});
+  makeCaption(856);
+  let cs=CASES[0],step=1,dx=4,tgt=sim(cs,true),cur={X:tgt.X.slice(),Y:tgt.Y.slice()};
+  const sw=v=>v>0?"+":"−",fm=v=>(v>0?"+":v<0?"−":"")+Math.abs(+v.toFixed(1));
+  // the regression's line for the share of dark, so the icons match the 0.25 per unit on screen
+  const share=(c,x)=>step===1?.5:Math.min(1,Math.max(0,.5+DELTA*c.sg*(x-5)));
+  function draw(){const c=cs,x0=3,x=3+dx,bias=c.b2*DELTA*c.sg,tot=c.b+bias;
+    const fT=v=>50+c.b*(v-5),fS=v=>50+tot*(v-5);
+    mT.setAttribute("cx",px(x));mT.setAttribute("cy",py(fT(x)));mS.setAttribute("cx",px(x));mS.setAttribute("cy",py(fS(x)));
+    paint(r0,x0,share(c,x0));paint(r1,x,share(c,x));
+    ln[0].textContent="Ideal: each unit of X changes Y by "+fm(c.b)+". That is the causal effect.";
+    ln[1].textContent=step>=3?"Each unit of X comes with δ₁ = "+(c.sg>0?"+":"−")+"0.25: "+(c.sg>0?"25% more":"25% fewer")+" dark ("+c.hi+").":"";
+    ln[2].textContent=step>=4?"Dark vs pale, at the same X: β₂ = "+fm(c.b2)+" on Y.":"";
+    ln[3].textContent=step>=5?"Bias = "+fm(c.b2)+" × "+(c.sg>0?"+":"−")+"0.25 = "+fm(bias)+", so the slope is "+fm(tot)+", not "+fm(c.b)+".":"";
+    tBar.textContent="Increase X by "+(+dx.toFixed(1))+": change in Y";
+    [c.b*dx,bias*dx,tot*dx].forEach((v,i)=>{const B=bars[i],on=i===0||step>=5,w=Math.abs(v)*PX;B.R.setAttribute("x",v>=0?ZX:ZX-w);B.R.setAttribute("width",w);B.v.textContent=fm(v);B.v.setAttribute("x",v>=0?ZX+w+8:ZX+8);[B.R,B.v,B.t].forEach(e=>e.style.opacity=on?1:0.15);});
+  }
+  function go(n){step=n;const c=cs,bias=c.b2*DELTA*c.sg,tot=c.b+bias,same=bias>0,dir=same?"upward":"downward",col=same?C.orange:C.blue;
+    if(n>=6)VISITED.add(c.btn);
+    tgt=sim(c,n===1);
+    tX.textContent=c.x+" (X)  →";tY.textContent=c.y+" (Y)  →";
+    bX.textContent=c.x;bZ.textContent=c.z+" (omitted)";bY.textContent=c.y;bZ.setAttribute("font-size",c.z.length>16?15:18);
+    sZX.textContent=n>=3?sw(c.sg):"";sZY.textContent=n>=4?sw(c.b2):"";
+    fade(dZX,n>=3?1:.15);fade(dZY,n>=4?1:.15);
+    tLeg.textContent="At this X, the mix of people. Dark: "+c.hi+". Pale: "+c.lo+".";
+    gCoin.style.opacity=n===1?1:0;tCoin.textContent=n===1?"a coin decides X":"no coin: X is chosen";tCoin.setAttribute("x",n===1?X0+80:X0+20);
+    const line=(l,f)=>{l.setAttribute("x1",px(1.5));l.setAttribute("y1",py(f(1.5)));l.setAttribute("x2",px(8.5));l.setAttribute("y2",py(f(8.5)));};
+    line(lT,v=>50+c.b*(v-5));line(lS,v=>50+tot*(v-5));
+    const seg=(l,z)=>{const m=5+1.5*c.sg*(z>0?1:-1),a=m-2.5,b=m+2.5,f=v=>50+c.b*(v-5)+c.b2*z/2;l.setAttribute("x1",px(a));l.setAttribute("y1",py(f(a)));l.setAttribute("x2",px(b));l.setAttribute("y2",py(f(b)));};seg(lHi,1);seg(lLo,-1);
+    const fH=v=>50+c.b*(v-5)+c.b2/2,fL=v=>50+c.b*(v-5)-c.b2/2,eH=5+1.5*c.sg+2,eL=5-1.5*c.sg-2;
+    tHi.textContent=c.hi;tHi.setAttribute("x",px(eH)-30);tHi.setAttribute("y",py(fH(eH))-14);tLo.textContent=c.lo;tLo.setAttribute("x",px(eL)-30);tLo.setAttribute("y",py(fL(eL))+28);
+    [lHi,lLo,tHi,tLo].forEach(e=>fade(e,n===4?1:0));
+    tT.textContent="causal slope: "+fm(c.b);tT.setAttribute("x",px(c.b>0?6.5:6.5));tT.setAttribute("y",py(50+c.b*1.5)+34);
+    tS.textContent="Z left out: "+fm(tot);tS.setAttribute("x",px(1.6));tS.setAttribute("y",py(50+tot*(1.8-5))+(tot>=0?-16:30));
+    fade(lS,n>=5?1:0);fade(mS,n>=5?1:0);fade(tS,n>=5?1:0);
+    gN.style.display=n>=6?"none":"";gT.style.display=n>=6?"":"none";
+    drawTable(c,n>=6);
+    if(n===1){para.textContent="Imagine a coin decides "+c.x+". Dark and pale are mixed at every X, so raising X changes nothing else.";caption("The ideal experiment: X changes Y directly, by "+fm(c.b)+" per unit. That is causal.",C.blue);explain("A coin assigns X, as in a randomised experiment. Move the slider: the mix of people stays 50–50 at every X, so the slope is the causal effect.");}
+    if(n===2){para.textContent=c.zx;caption("In reality, X is not assigned by a coin: there is selection.",C.dark);explain("Watch the dots move. The people are the same, but now X depends on Z. The blue line is still the causal effect; the data no longer line up with it so simply.");}
+    if(n===3){para.textContent="Raising X now also changes who we are looking at. Move the slider and watch the mix of people change.";caption("The groups differ: when X changes, Z changes too. Second sign: "+sw(c.sg)+".",C.orange);explain("In the ideal experiment the mix stayed 50–50. Now it depends on X. This is the correlation between Z and X, and δ₁ is the slope from regressing Z on X.");}
+    if(n===4){para.textContent=c.zy;caption("Z has its own effect on Y. First sign: "+sw(c.b2)+".",C.orange);explain("The dashed lines are parallel: within each group, X has the same causal effect. The gap between them is the effect of Z on Y holding X constant, β₂.");}
+    if(n===5){para.textContent=c.intu;caption("Slope with Z left out: "+fm(tot)+", against "+fm(c.b)+" in the ideal experiment. "+sw(c.b2)+" × "+sw(c.sg)+": "+dir+" bias.",col);explain("Moving along X now also moves from one group towards the other, so the simple regression adds that change in Z to the effect of X. Move the slider: the gap grows with X, and the bars show the two pieces.");}
+    if(n>=6){para.textContent=c.intu;caption("Into the table: Z "+(c.b2>0?"raises":"lowers")+" Y and is "+(c.sg>0?"positively":"negatively")+" correlated with X: "+dir+".",col);explain("Same signs give upward bias, opposite signs give downward bias. The table keeps every case you have finished.");}
+    draw();
+  }
+  const sb=[button("1 Ideal",()=>go(1),true),button("2 Selection",()=>go(2)),button("3 Groups",()=>go(3)),button("4 Z → Y",()=>go(4)),button("5 Bias",()=>go(5)),button("6 Table",()=>go(6))];group(sb);
+  sep();
+  const sl=slider("Increase X",0,4,dx,0.1,v=>{dx=v;draw();});sl.style.width="110px";
+  sep();
+  const cb=CASES.map((c,i)=>button(c.btn,()=>{cs=c;dx=4;sl.value=4;sb.forEach(b=>b.classList.remove("on"));sb[0].classList.add("on");go(1);},i===0));group(cb);
+  S2.frame=function(dt){const k=ez(dt,0.3);for(let i=0;i<n;i++){cur.X[i]+=(tgt.X[i]-cur.X[i])*k;cur.Y[i]+=(tgt.Y[i]-cur.Y[i])*k;pts[i].setAttribute("cx",px(cur.X[i]));pts[i].setAttribute("cy",py(cur.Y[i]));}};
+  // the guide: parts of the screen appear one at a time, each with a note, until all of it is showing
+  const AP={x:60,y:125,w:830,h:675},AD={x:935,y:128,w:625,h:136},AI={x:935,y:266,w:625,h:136},AN={x:935,y:406,w:625,h:144},AB={x:935,y:552,w:625,h:150},AC={x:60,y:800,w:1480,h:72};
+  function stops(){const c=cs;return [
+    {a:AP,bx:935,by:230,t:"The picture",s:"Each dot is one person. Across is "+c.x+" (X). Up is "+c.y+" (Y). Dark dots: "+c.hi+". Pale dots: "+c.lo+". That is the omitted variable Z."},
+    {a:AP,bx:935,by:230,t:"The blue line",s:"This is the causal effect of X on Y: what an ideal experiment would find. The blue dot sits at the current X. In step 5 an orange line joins it, the slope when Z is left out."},
+    {a:AD,bx:935,by:440,t:"The map",s:"X → Y is the effect we want. Z is the omitted variable. A sign appears on each orange link once we know it: Z and X in step 3, Z and Y in step 4."},
+    {a:AI,bx:935,by:440,t:"Who is at this X",s:"Each row shows ten people at one value of X: the starting X on top, the current X below. The % is the share of dark. Watch whether the mix changes when X goes up."},
+    {a:AN,bx:935,by:562,t:"The numbers",s:"One line now, the causal effect. Steps 3, 4 and 5 add a line each, and they end with the bias."},
+    {a:AB,bx:300,by:430,t:"The bars",s:"When X goes up, how much does Y change? Blue is X itself. Orange is the part through Z. Black is the total with Z left out. The last two come on in step 5."},
+    {a:AC,bx:330,by:560,t:"The words",s:"The bottom lines say what the current step shows."},
+    {a:null,bx:330,by:500,t:"The controls",s:"Left: the six steps, in order. Middle: the slider that increases X. Right: the six cases. Click a step or a case to begin. Guide replays this tour."}];}
+  let tourG=null;
+  function endTour(){if(!tourG)return;tourG.remove();tourG=null;ctl.style.outline="";ctl.style.opacity="";ctl.style.pointerEvents="";ctl.removeEventListener("click",endTour,true);}
+  function startTour(){endTour();cur.X=tgt.X.slice();cur.Y=tgt.Y.slice();
+    tourG=el("g",{});const S=stops();let k=0;
+    const cover=el("path",{fill:"#FFFFFF","fill-rule":"evenodd"},tourG),edge=el("rect",{fill:"none",stroke:C.orange,"stroke-width":3,rx:8},tourG);
+    const card=el("rect",{width:610,rx:10,fill:"#fff",stroke:C.blue,"stroke-width":2},tourG),hd=txt(0,0,"",{"font-size":26,"font-weight":700,fill:C.blue},tourG),body=txt(0,0,"",{"font-size":21,fill:C.ink},tourG),more=txt(0,0,"",{"font-size":17,fill:C.grey},tourG);
+    tourG.style.cursor="pointer";
+    function show1(){const s=S[k],seen=[];S.slice(0,k+1).forEach(v=>{if(v.a&&!seen.includes(v.a))seen.push(v.a);});
+      const R=(x,y,w,h)=>"M"+x+" "+y+"h"+w+"v"+h+"h"+(-w)+"z";
+      cover.setAttribute("d",R(0,118,1600,782)+seen.map(a=>R(a.x,a.y,a.w,a.h)).join(""));
+      edge.style.display=s.a?"":"none";if(s.a){edge.setAttribute("x",s.a.x);edge.setAttribute("y",s.a.y);edge.setAttribute("width",s.a.w);edge.setAttribute("height",s.a.h);}
+      const last=!s.a;ctl.style.opacity=last?"":"0.15";ctl.style.pointerEvents=last?"":"none";ctl.style.outline=last?"3px solid "+C.orange:"";
+      while(body.firstChild)body.removeChild(body.firstChild);
+      const X=s.bx+24,lines=[];let line="";s.s.split(" ").forEach(v=>{if((line+" "+v).length>50){lines.push(line);line=v;}else line=line?line+" "+v:v;});if(line)lines.push(line);
+      hd.textContent=s.t+"  ("+(k+1)+" of "+S.length+")";hd.setAttribute("x",X);hd.setAttribute("y",s.by+42);
+      body.setAttribute("x",X);body.setAttribute("y",s.by+78);lines.forEach((t,i)=>{const e=el("tspan",{x:X,dy:i?29:0},body);e.textContent=t;});
+      const h=78+29*(lines.length-1)+52;
+      more.textContent=last?"Click the picture, a step or a case to close the guide":"Click anywhere to continue";more.setAttribute("x",X);more.setAttribute("y",s.by+h-16);
+      card.setAttribute("x",s.bx);card.setAttribute("y",s.by);card.setAttribute("height",h);}
+    tourG.addEventListener("click",()=>{k++;if(k>=S.length)endTour();else show1();});
+    ctl.addEventListener("click",endTour,true);
+    show1();}
+  S2.cleanup=endTour;
+  button("Guide",()=>{sb.forEach(b=>b.classList.remove("on"));sb[0].classList.add("on");dx=4;sl.value=4;go(1);startTour();});
+  go(1);
+  S2.toured||(S2.toured=true,startTour());
+};
+
+/* ===================================================================== */
+const SCENES=[S1,S2];let cur=0,last=performance.now();
+function show(i){hideTip();if(SCENES[cur].cleanup)SCENES[cur].cleanup();cur=(i+SCENES.length)%SCENES.length;svg.innerHTML="";ctl.innerHTML="";capEl=null;SCENES[cur].frame=null;SCENES[cur].build();
+  svg.style.animation="none";void svg.getBoundingClientRect();svg.style.animation="fadein .35s ease-out";}
+function tick(t){const dt=Math.min(0.1,Math.max(0,(t-last)/1000));last=t;if(SCENES[cur].frame)SCENES[cur].frame(dt);}
+function loop(t){tick(t);requestAnimationFrame(loop);}
+// backstop when requestAnimationFrame is throttled (hidden tabs)
+setInterval(()=>{const t=performance.now();if(t-last>250)tick(t);},250);
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;if(e.key==="ArrowRight")show(cur+1);else if(e.key==="ArrowLeft")show(cur-1);else if(e.key==="i"||e.key==="I")toggleInfo();else if(e.key==="f"||e.key==="F"){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}});
+show(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>

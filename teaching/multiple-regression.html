@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Multiple Regression</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --blue:#0021A5; --soft:#4A6FD4; --orange:#FA4616; --ink:#4B5563; --grey:#9AA1AE; --bg:#FCFCFE; }
+  html,body{margin:0;height:100%;background:var(--bg);font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;overflow:hidden;color:var(--ink)}
+  #stage{position:absolute;inset:0 0 86px 0;display:flex;align-items:center;justify-content:center}
+  svg{width:100vw;height:calc(56.25vw);max-height:calc(100vh - 86px);max-width:calc((100vh - 86px)*1.7778);user-select:none}
+  #controls{position:fixed;left:0;right:0;bottom:30px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;padding:0 16px}
+  #controls button{font:inherit;font-size:15px;padding:7px 14px;border-radius:8px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #controls button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  #controls label{font-size:15px;display:flex;align-items:center;gap:8px}
+  #controls input[type=range]{width:220px;accent-color:var(--orange)}
+  #controls .sep{width:1px;height:26px;background:#D4D8DE;margin:0 4px}
+  #help{position:fixed;left:16px;bottom:6px;font-size:12px;color:var(--grey)}
+  #tip{position:fixed;z-index:6;pointer-events:none;display:none;max-width:320px;background:#fff;border:1.5px solid #D4D8DE;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.12);padding:8px 11px;font-size:15px;line-height:1.4;color:var(--ink)}
+  text{font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif}
+  #infoBtn{position:fixed;top:12px;right:16px;z-index:5;font:inherit;font-size:15px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #infoBtn.on{background:var(--blue);color:#fff}
+  #info{position:fixed;top:56px;right:16px;width:min(400px,90vw);max-height:calc(100vh - 160px);overflow:auto;z-index:4;background:rgba(255,255,255,0.97);border:1.5px solid #D4D8DE;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,0.12);padding:16px 18px;font-size:15px;line-height:1.45;display:none}
+  #info.show{display:block}
+  #info h3{margin:12px 0 4px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:var(--grey)}
+  #info h3:first-child{margin-top:0}
+  #info p{margin:0 0 4px}
+  #info .now{background:#FFF4EF;border-left:4px solid var(--orange);padding:8px 10px;border-radius:6px}
+  @keyframes fadein{from{opacity:0}}
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div id="controls"></div>
+<button id="infoBtn" title="Show or hide the explanation (I)">&#9432; Explain</button>
+<div id="info"><h3>The data</h3><p id="iStudy"></p><h3>What to do</h3><p id="iDo"></p><h3>Look for</h3><p id="iLook"></p><h3>What you are seeing now</h3><p id="iNow" class="now"></p></div>
+<div id="tip"></div>
+<div id="help">&rarr; &larr;: switch animation &nbsp;·&nbsp; F: full screen &nbsp;·&nbsp; I or &#9432;: explanation &nbsp;·&nbsp; use the buttons below the picture &nbsp;·&nbsp; hover over a house for its details</div>
+<script>
+/* 88 houses sold in the Boston area in 1990 (Wooldridge, Introductory Econometrics, hprice1).
+   Each row: [sale price in $1000s, bedrooms, size in square feet]. */
+const H=[[300.000,4,2438],[370.000,3,2076],[191.000,3,1374],[195.000,3,1448],[373.000,4,2514],[466.275,5,2754],[332.500,3,2067],[315.000,3,1731],[206.000,3,1767],[240.000,3,1890],[285.000,4,2336],[300.000,5,2634],[405.000,3,3375],[212.000,3,1899],[265.000,3,2312],[227.400,4,1760],[240.000,4,2000],[285.000,3,1774],[268.000,3,1376],[310.000,4,1835],[266.000,3,2048],[270.000,3,2124],[225.000,3,1768],[150.000,4,1732],[247.000,3,1440],[275.000,3,1932],[230.000,3,1932],[343.000,3,2106],[477.500,7,3529],[350.000,4,2051],[230.000,4,1573],[335.000,4,2829],[251.000,3,1630],[235.000,4,1840],[361.000,4,2066],[190.000,4,1702],[360.000,4,2750],[575.000,5,3880],[209.001,4,1854],[225.000,2,1421],[246.000,3,1662],[713.500,5,3331],[248.000,4,1656],[230.000,3,1171],[375.000,5,2293],[265.000,3,1764],[313.000,3,2768],[417.500,4,3733],[253.000,3,1536],[315.000,4,1638],[264.000,3,1972],[255.000,2,1478],[210.000,3,1408],[180.000,3,1812],[250.000,3,1722],[250.000,4,1780],[209.000,4,1674],[258.000,4,1850],[289.000,3,1925],[316.000,4,2343],[225.000,3,1567],[266.000,4,1664],[310.000,6,1386],[471.250,5,2617],[335.000,4,2321],[495.000,4,2638],[279.500,4,1915],[380.000,4,2589],[325.000,4,2709],[220.000,3,1587],[215.000,3,1694],[240.000,3,1536],[725.000,5,3662],[230.000,3,1736],[306.000,2,2205],[425.000,3,1502],[318.000,4,1696],[330.000,3,2186],[246.000,4,1928],[225.000,3,1294],[111.000,4,1535],[268.125,3,1980],[244.000,4,2090],[295.000,3,1837],[236.000,3,1715],[202.500,3,1574],[219.000,2,1185],[242.000,4,1774]];
+const C={blue:"#0021A5",soft:"#4A6FD4",orange:"#FA4616",ink:"#4B5563",grey:"#9AA1AE",pale:"#E5E7EB",dark:"#1F2937"};
+const NS="http://www.w3.org/2000/svg", svg=document.getElementById("svg"), ctl=document.getElementById("controls");
+function el(tag,a,p){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e;}
+function txt(x,y,s,a,p){const e=el("text",Object.assign({x,y,"font-size":22,fill:C.ink},a||{}),p);e.textContent=s;return e;}
+const HALO={stroke:"#fff","stroke-width":5,"paint-order":"stroke","stroke-linejoin":"round"};
+function ez(dt,tau){return 1-Math.exp(-dt/tau);}
+function ease(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function normal(r){let u=0,v=0;while(u===0)u=r();v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function header(t,s,n){txt(70,70,t,{"font-size":38,"font-weight":700,fill:C.blue});txt(70,108,s,{"font-size":22,fill:C.ink});txt(1530,70,"Animation "+n+" of 4",{"font-size":18,fill:C.grey,"text-anchor":"end"});}
+const tipEl=document.getElementById("tip");
+function showTip(e,h){tipEl.innerHTML=h;tipEl.style.display="block";tipEl.style.left=Math.min(e.clientX+16,window.innerWidth-340)+"px";tipEl.style.top=Math.min(e.clientY+16,window.innerHeight-170)+"px";}
+function hideTip(){tipEl.style.display="none";}
+function hoverTip(node,fn){node.style.cursor="help";node.addEventListener("mousemove",e=>showTip(e,fn()));node.addEventListener("mouseleave",hideTip);}
+let capEl=null;function caption(s,col){if(!capEl)return;capEl.textContent=s;capEl.setAttribute("fill",col||C.dark);}
+function makeCaption(y){capEl=txt(800,y||862,"",{"font-size":26,"text-anchor":"middle","font-weight":600});}
+function button(label,fn,on){const b=document.createElement("button");b.textContent=label;if(on)b.classList.add("on");b.onclick=()=>fn(b);ctl.appendChild(b);return b;}
+function group(btns){btns.forEach(b=>b.addEventListener("click",()=>{btns.forEach(x=>x.classList.remove("on"));b.classList.add("on");}));}
+function sep(){const s=document.createElement("span");s.className="sep";ctl.appendChild(s);}
+function slider(label,min,max,val,step,fn){const l=document.createElement("label");l.textContent=label;const r=document.createElement("input");r.type="range";r.min=min;r.max=max;r.value=val;r.step=step;r.oninput=()=>fn(+r.value);l.appendChild(r);ctl.appendChild(l);return r;}
+const infoEl=document.getElementById("info"),infoBtn=document.getElementById("infoBtn");
+function toggleInfo(){infoEl.classList.toggle("show");infoBtn.classList.toggle("on");}
+infoBtn.onclick=toggleInfo;
+function setInfo(o){document.getElementById("iStudy").innerHTML=o.study;document.getElementById("iDo").innerHTML=o.todo;document.getElementById("iLook").innerHTML=o.look;lastNow="";}
+let lastNow="";function explain(h){if(h===lastNow)return;lastNow=h;document.getElementById("iNow").innerHTML=h;}
+// colour by size: soft blue (1,200 sq ft) to orange (3,000 sq ft or more)
+const SOFT=[74,111,212],ORNG=[250,70,22];
+function sizeRGB(q){const t=Math.min(1,Math.max(0,(q-1200)/1800));return SOFT.map((v,i)=>v+(ORNG[i]-v)*t);}
+function rgb(a){return "rgb("+a.map(Math.round).join(",")+")";}
+function sizeColor(q){return rgb(sizeRGB(q));}
+// OLS by the normal equations (columns of X include the intercept)
+function ols(X,y){const k=X.length,n=y.length;const A=[...Array(k)].map(()=>Array(k+1).fill(0));
+  for(let a=0;a<k;a++){for(let b=0;b<k;b++){let s=0;for(let i=0;i<n;i++)s+=X[a][i]*X[b][i];A[a][b]=s;}let s=0;for(let i=0;i<n;i++)s+=X[a][i]*y[i];A[a][k]=s;}
+  for(let c=0;c<k;c++){let p=c;for(let r=c+1;r<k;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;[A[c],A[p]]=[A[p],A[c]];
+    for(let r=0;r<k;r++)if(r!==c){const f=A[r][c]/A[c][c];for(let q=c;q<=k;q++)A[r][q]-=f*A[c][q];}}
+  const beta=A.map((r,i)=>r[k]/r[i]);const fit=y.map((_,i)=>beta.reduce((s,bb,a)=>s+bb*X[a][i],0));return {beta,fit};}
+const N=H.length, PR=H.map(h=>h[0]), BD=H.map(h=>h[1]), SQ=H.map(h=>h[2]);
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const ONE=Array(N).fill(1), YBAR=mean(PR), BBAR=mean(BD);
+const M1=ols([ONE,BD],PR), M2=ols([ONE,BD,SQ],PR);
+const f1=(v,d)=>v.toFixed(d===undefined?1:d);
+const sgn=(v,d)=>(v>=0?"+":"−")+Math.abs(v).toFixed(d===undefined?1:d);
+function fmtInt(v){return Math.round(v).toLocaleString("en-US");}
+function money(p){return "$"+fmtInt(p*1000);}
+function kk(p){return "$"+Math.round(p)+"k";}
+function houseTip(i){return "<b>House "+(i+1)+"</b><br>"+BD[i]+" bedrooms, "+fmtInt(SQ[i])+" sq ft<br>sold for "+money(PR[i]);}
+// a house icon one unit wide, centred near (0,0)
+const HOUSE="M-0.62,0.03 L0,-0.5 L0.62,0.03 Z M-0.47,0 L0.47,0 L0.47,0.52 L-0.47,0.52 Z", DOOR="M-0.09,0.52 L-0.09,0.27 L0.09,0.27 L0.09,0.52 Z";
+
+/* =====================================================================
+   ANIMATION 1: compare like with like (icons)
+   ===================================================================== */
+const S0={};
+S0.build=function(){
+  header("Compare like with like","88 houses sold in the Boston area, 1990. What is one more bedroom worth?",1);
+  setInfo({study:"88 houses sold in the Boston area in 1990. Each house icon is one sale: its column is its number of bedrooms, its height is its sale price. From step 2, each icon's size and colour show the house's floor area in square feet: small and blue for small houses, big and orange for big ones.",
+    todo:"Click the four steps in order. In step 3, move the slider to choose which houses count as “the same size”. Hover over a house for its details. The diagram on the right shows what each comparison holds fixed.",
+    look:"Step 1: one regressor says +$62,000 per bedroom. Step 2: the houses with more bedrooms are also bigger, so that comparison mixes bedrooms with size. Step 3: among houses of about the same size, more bedrooms barely change the price. Step 4: multiple regression holds size constant using all 88 houses at once: +$15,200 per bedroom."});
+  const X0=120,X1=1060,T=170,B=740;
+  const cx=b=>X0+80+(b-2)*((X1-X0-140)/5), py=p=>B-(p-100)/650*(B-T);
+  const defs=el("defs",{});const mk=el("marker",{id:"ah",viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:6,markerHeight:6,orient:"auto-start-reverse"},defs);el("path",{d:"M0,0 L10,5 L0,10 z",fill:C.dark},mk);
+  const lg=el("linearGradient",{id:"szg",x1:0,x2:1,y1:0,y2:0},defs);el("stop",{offset:"0%","stop-color":sizeColor(1200)},lg);el("stop",{offset:"100%","stop-color":sizeColor(3000)},lg);
+  // axes
+  const gAx=el("g",{});
+  [200,300,400,500,600,700].forEach(p=>{el("line",{x1:X0,y1:py(p),x2:X1,y2:py(p),stroke:C.pale,"stroke-width":1},gAx);txt(X0-12,py(p)+6,"$"+p+"k",{"font-size":16,fill:C.grey,"text-anchor":"end"},gAx);});
+  el("line",{x1:X0,y1:B,x2:X1,y2:B,stroke:C.grey,"stroke-width":2},gAx);el("line",{x1:X0,y1:T-10,x2:X0,y2:B,stroke:C.grey,"stroke-width":2},gAx);
+  txt(X0-12,T-26,"sale price",{"font-size":19,"text-anchor":"start"},gAx);
+  const cnt={},mp={},ms={};for(let b=2;b<=7;b++){const ix=[...Array(N).keys()].filter(i=>BD[i]===b);cnt[b]=ix.length;mp[b]=mean(ix.map(i=>PR[i]));ms[b]=mean(ix.map(i=>SQ[i]));}
+  const colInfo={};
+  for(let b=2;b<=7;b++){txt(cx(b),B+30,b+" bedrooms",{"font-size":18,fill:C.ink,"text-anchor":"middle","font-weight":600},gAx);colInfo[b]=[txt(cx(b),B+54,"",{"font-size":15,fill:C.grey,"text-anchor":"middle"},gAx),txt(cx(b),B+75,"",{"font-size":15,fill:C.blue,"text-anchor":"middle","font-weight":600},gAx)];}
+  // size legend
+  const gLeg=el("g",{});el("rect",{x:800,y:150,width:220,height:14,rx:7,fill:"url(#szg)"},gLeg);
+  txt(800,140,"icon size and colour: floor area",{"font-size":16,fill:C.ink},gLeg);txt(800,186,"1,200 sq ft",{"font-size":14,fill:C.grey},gLeg);txt(1020,186,"3,000+",{"font-size":14,fill:C.grey,"text-anchor":"end"},gLeg);
+  // the houses, big ones drawn first
+  const W=i=>26*SQ[i]/2000;
+  const jit=Array(N).fill(0);for(let b=2;b<=7;b++){const ix=[...Array(N).keys()].filter(i=>BD[i]===b).sort((a,c)=>PR[a]-PR[c]);ix.forEach((i,k)=>{jit[i]=ix.length>1?(((k*0.618034)%1)-0.5)*112:0;});}
+  const gI=el("g",{});
+  const icons=Array(N);[...Array(N).keys()].sort((a,c)=>SQ[c]-SQ[a]).forEach(i=>{const g=el("g",{},gI);
+    const p=el("path",{d:HOUSE,stroke:"#fff","stroke-width":1.2,"vector-effect":"non-scaling-stroke"},g);el("path",{d:DOOR,fill:"#fff"},g);
+    hoverTip(g,()=>houseTip(i));icons[i]={g,p,x:cx(BD[i])+jit[i],y:py(PR[i]),o:0.85};});
+  // column averages, all houses
+  const gAvg=el("g",{});
+  const avgs=[];for(let b=2;b<=7;b++){avgs.push(el("line",{x1:cx(b)-62,x2:cx(b)+62,y1:py(mp[b]),y2:py(mp[b]),stroke:C.blue,"stroke-width":3.5},gAvg));}
+  // one regressor
+  const y1=b=>py(M1.beta[0]+M1.beta[1]*b);
+  const gL1=el("g",{});el("line",{x1:cx(2),y1:y1(2),x2:cx(7),y2:y1(7),stroke:C.dark,"stroke-width":3.5,"stroke-dasharray":"12 8"},gL1);
+  txt(cx(6.3),y1(6.3)-46,"one regressor:",Object.assign({"font-size":17,fill:C.dark,"font-weight":700,"text-anchor":"middle"},HALO),gL1);
+  txt(cx(6.3),y1(6.3)-24,"+$62.0k per bedroom",Object.assign({"font-size":17,fill:C.dark,"font-weight":700,"text-anchor":"middle"},HALO),gL1);
+  // same-size window: column averages inside it
+  const gW=el("g",{});
+  const wb={};for(let b=2;b<=7;b++){wb[b]={L:el("line",{x1:cx(b)-62,x2:cx(b)+62,stroke:C.orange,"stroke-width":5},gW),t:txt(cx(b)-62,0,"",Object.assign({"font-size":17,fill:C.orange,"font-weight":700},HALO),gW),y:py(250),ty:py(250),o:0,to:0};}
+  // multiple regression: one line per size, all with the same slope
+  const QS=[1500,2000,2500,3000],gM=el("g",{});
+  const y2=(b,q)=>py(M2.beta[0]+M2.beta[1]*b+M2.beta[2]*q);
+  QS.forEach(q=>{el("line",{x1:cx(2),y1:y2(2,q),x2:cx(7),y2:y2(7,q),stroke:sizeColor(q),"stroke-width":4.5},gM);
+    txt(cx(7)+14,y2(7,q)+6,fmtInt(q)+" sq ft",Object.assign({"font-size":16,fill:sizeColor(q),"font-weight":700},HALO),gM);});
+  // the diagram: what the comparison holds fixed
+  const PX=1100,gD=el("g",{});
+  el("rect",{x:PX,y:150,width:470,height:640,rx:14,fill:"#fff",stroke:"#D4D8DE","stroke-width":1.5},gD);
+  txt(PX+24,190,"What does the comparison hold fixed?",{"font-size":20,"font-weight":700,fill:C.blue},gD);
+  const bedX=PX+95,bedY=300,prX=PX+380,prY=300,szX=PX+237,szY=470;
+  // bed icon
+  const gBed=el("g",{},gD);
+  el("rect",{x:bedX-42,y:bedY-30,width:9,height:48,rx:2,fill:C.blue},gBed);
+  el("rect",{x:bedX-36,y:bedY-2,width:76,height:16,rx:3,fill:C.blue},gBed);
+  el("rect",{x:bedX-30,y:bedY-14,width:20,height:11,rx:4,fill:C.soft},gBed);
+  el("rect",{x:bedX-8,y:bedY-11,width:46,height:9,rx:3,fill:C.soft},gBed);
+  el("rect",{x:bedX+34,y:bedY+14,width:5,height:9,fill:C.blue},gBed);
+  txt(bedX,bedY+56,"bedrooms",{"font-size":19,"text-anchor":"middle","font-weight":600},gBed);
+  // price icon
+  const gPr=el("g",{},gD);
+  el("circle",{cx:prX,cy:prY,r:30,fill:"#fff",stroke:C.dark,"stroke-width":3},gPr);
+  txt(prX,prY+13,"$",{"font-size":36,"font-weight":700,fill:C.dark,"text-anchor":"middle"},gPr);
+  txt(prX,prY+56,"price",{"font-size":19,"text-anchor":"middle","font-weight":600},gPr);
+  // size icon: a house with a width arrow
+  const gSz=el("g",{},gD);
+  el("path",{d:"M"+(szX-40)+","+(szY-4)+" L"+szX+","+(szY-38)+" L"+(szX+40)+","+(szY-4)+" M"+(szX-32)+","+(szY-8)+" L"+(szX-32)+","+(szY+24)+" L"+(szX+32)+","+(szY+24)+" L"+(szX+32)+","+(szY-8),fill:"none",stroke:C.orange,"stroke-width":4,"stroke-linejoin":"round"},gSz);
+  el("line",{x1:szX-30,y1:szY+40,x2:szX+30,y2:szY+40,stroke:C.orange,"stroke-width":2.5,"marker-start":"url(#ah)","marker-end":"url(#ah)"},gSz);
+  txt(szX,szY+72,"size (sq ft)",{"font-size":19,"text-anchor":"middle","font-weight":600},gSz);
+  // links
+  const aBP=el("line",{x1:bedX+55,y1:bedY,x2:prX-40,y2:prY,stroke:C.dark,"stroke-width":3,"marker-end":"url(#ah)"},gD);
+  const tBP=txt((bedX+prX)/2+8,bedY-14,"",{"font-size":22,"font-weight":700,fill:C.dark,"text-anchor":"middle"},gD);
+  const sBP=txt((bedX+prX)/2+8,bedY+30,"",{"font-size":16,fill:C.ink,"text-anchor":"middle"},gD);
+  const aSP=el("line",{x1:szX+38,y1:szY-30,x2:prX-25,y2:prY+25,stroke:C.dark,"stroke-width":3,"marker-end":"url(#ah)"},gD);
+  const tSP=txt(szX+92,szY-56,"",{"font-size":16,fill:C.ink,"font-weight":600},gD);
+  const aSB=el("line",{x1:szX-40,y1:szY-30,x2:bedX+18,y2:bedY+40,stroke:C.orange,"stroke-width":2.5,"stroke-dasharray":"7 5","marker-start":"url(#ah)","marker-end":"url(#ah)"},gD);
+  const tSB=txt(szX-84,szY-46,"correlated",{"font-size":16,fill:C.orange,"font-weight":600,"text-anchor":"end"},gD);
+  // lock on size
+  const gLock=el("g",{},gD);const lx=szX+62,ly=szY+6;
+  el("path",{d:"M"+(lx-9)+","+(ly-4)+" v-9 a9,9 0 0 1 18,0 v9",fill:"none",stroke:C.dark,"stroke-width":4},gLock);
+  el("rect",{x:lx-14,y:ly-4,width:28,height:22,rx:4,fill:C.dark},gLock);
+  const tLock=txt(szX,szY+98,"",{"font-size":16,fill:C.dark,"font-weight":700,"text-anchor":"middle"},gLock);
+  const eqT=[0,1,2,3,4].map(k=>txt(PX+24,640+k*30,"",{"font-size":18,fill:C.ink},gD));
+  makeCaption();
+  const st={step:1,sz:0,tsz:0,avg:1,tavg:1,l1:1,tl1:1,win:0,twin:0,mul:0,tmul:0,dia:0,tdia:0,lock:0,tlock:0,lo:1600};
+  let W3=null;
+  function winStats(){const lo=st.lo,hi=lo+400,ix=[...Array(N).keys()].filter(i=>SQ[i]>lo&&SQ[i]<=hi);
+    const g={};ix.forEach(i=>{(g[BD[i]]=g[BD[i]]||[]).push(i);});
+    const bs=Object.keys(g).map(Number).sort();let slope=null;
+    if(bs.length>=2&&ix.length>=4)slope=ols([ix.map(()=>1),ix.map(i=>BD[i])],ix.map(i=>PR[i])).beta[1];
+    for(let b=2;b<=7;b++){const w=wb[b];if(g[b]){w.ty=py(mean(g[b].map(i=>PR[i])));w.to=1;w.t.textContent=kk(mean(g[b].map(i=>PR[i])))+" ("+g[b].length+")";}else w.to=0;}
+    W3={lo,hi,n:ix.length,g,bs,slope};}
+  function go(n){st.step=n;st.tsz=n>=2?1:0;st.tavg=n<=2?1:0;st.tl1=n<=2?1:(n===4?0.3:0.15);st.twin=n===3?1:0;st.tmul=n===4?1:0;st.tdia=n>=2?1:0;st.tlock=n>=3?1:0;if(n===3)winStats();}
+  const sb=[button("1 · One regressor",()=>go(1),true),button("2 · What else differs?",()=>go(2)),button("3 · Same size only",()=>go(3)),button("4 · Multiple regression",()=>go(4))];group(sb);
+  sep();slider("same size: from (sq ft)",1200,3400,1600,50,v=>{st.lo=v;if(st.step!==3)sb[2].click();else winStats();});
+  S0.frame=function(dt){
+    const k=ez(dt,0.32);["sz","avg","l1","win","mul","dia","lock"].forEach(q=>{st[q]+=(st["t"+q]-st[q])*k;});
+    const s=st.step,inW=i=>W3&&SQ[i]>W3.lo&&SQ[i]<=W3.hi;
+    icons.forEach((c,i)=>{const sc=20+(W(i)-20)*st.sz;const to=s===3?(inW(i)?0.95:0.08):(s===4?0.5:0.85);c.o+=(to-c.o)*k;
+      c.g.setAttribute("transform","translate("+c.x.toFixed(1)+","+c.y.toFixed(1)+") scale("+sc.toFixed(2)+")");c.g.setAttribute("opacity",c.o.toFixed(3));
+      c.p.setAttribute("fill",rgb(SOFT.map((v,j)=>v+(sizeRGB(SQ[i])[j]-v)*st.sz)));});
+    gAvg.setAttribute("opacity",st.avg.toFixed(3));gL1.setAttribute("opacity",st.l1.toFixed(3));gM.setAttribute("opacity",st.mul.toFixed(3));gLeg.setAttribute("opacity",st.sz.toFixed(3));
+    for(let b=2;b<=7;b++){const w=wb[b];w.y+=(w.ty-w.y)*k;w.o+=(w.to-w.o)*k;w.L.setAttribute("y1",w.y);w.L.setAttribute("y2",w.y);const o=(w.o*st.win).toFixed(3);w.L.setAttribute("opacity",o);w.t.setAttribute("opacity",0);
+      const wg=s===3&&W3?W3.g[b]:null;
+      colInfo[b][0].textContent=s===2?"avg "+fmtInt(ms[b])+" sq ft":(s===3?(wg?wg.length+" in range":"none in range"):cnt[b]+(cnt[b]===1?" house":" houses"));
+      colInfo[b][1].textContent=s<=2?"avg "+kk(mp[b]):(s===3&&wg?"avg "+kk(mean(wg.map(i=>PR[i]))):"");colInfo[b][1].setAttribute("fill",s===3?C.orange:C.blue);}
+    // diagram
+    gSz.setAttribute("opacity",(0.12+0.88*st.dia).toFixed(3));aSP.setAttribute("opacity",st.dia.toFixed(3));tSP.setAttribute("opacity",st.dia.toFixed(3));
+    const sb2=st.dia*(1-0.85*st.lock);aSB.setAttribute("opacity",sb2.toFixed(3));tSB.setAttribute("opacity",sb2.toFixed(3));gLock.setAttribute("opacity",st.lock.toFixed(3));
+    tSP.textContent=s===4?"+$128 per sq ft":"bigger, pricier";
+    tLock.textContent=s===3&&W3?"held at "+fmtInt(W3.lo+1)+"–"+fmtInt(W3.hi)+" sq ft":(s===4?"held constant by the regression":"");
+    if(s===1){tBP.textContent="+$62.0k";sBP.textContent="per bedroom";}
+    if(s===2){tBP.textContent="+$62.0k";sBP.textContent="bedroom + extra space";}
+    if(s===3){tBP.textContent=W3&&W3.slope!==null?sgn(W3.slope)+"k":"?";sBP.textContent=W3&&W3.slope!==null?"per bedroom, same size":"too few houses to compare";}
+    if(s===4){tBP.textContent="+$15.2k";sBP.textContent="per bedroom, same size";}
+    const eq=s===1?["price = 72.2 + 62.0 × bedrooms","","Compares all 3-bedroom houses with","all 4-bedroom houses, and so on."]:
+      s===2?["price = 72.2 + 62.0 × bedrooms","","Houses with more bedrooms are bigger:","average size rises from 1,572 sq ft (2 bed)","to 3,024 sq ft (5 bed)."]:
+      s===3?(W3?["Houses of "+fmtInt(W3.lo+1)+"–"+fmtInt(W3.hi)+" sq ft: "+W3.n].concat(W3.bs.slice(0,4).map(b=>"   "+b+" bedrooms: "+W3.g[b].length+(W3.g[b].length===1?" house, ":" houses, ")+"avg "+kk(mean(W3.g[b].map(i=>PR[i]))))):[]):
+      ["price = −19.3 + 15.2 × bedrooms","                + 0.128 × sq ft","","One slope for every size: 15.2.","Uses all 88 houses at once."];
+    eqT.forEach((e,j)=>{e.textContent=eq[j]||"";e.setAttribute("font-weight",j===0?700:400);e.setAttribute("fill",j===0?C.dark:C.ink);});
+    if(s===1){caption("One regressor: one more bedroom is associated with a price $62,000 higher, on average.");explain("Each icon is a house, placed in the column of its number of bedrooms at the height of its sale price. The blue bars are each column's average price. The dashed line is the one-regressor fit: price = 72.2 + 62.0 × bedrooms. It compares 3-bedroom houses with 4-bedroom houses, whatever else differs.");}
+    if(s===2){caption("Houses with more bedrooms are also bigger: the $62,000 mixes the two.",C.orange);explain("Now each icon shows the house's real floor area: bigger and more orange means more square feet. Look along the columns: the 4- and 5-bedroom houses are mostly big and orange. So the $62,000 compares big houses with small ones. Part of it is the bedroom, part is the extra space. In the diagram, size moves with bedrooms and also raises the price.");}
+    if(s===3&&W3){const two=[3,4].filter(b=>W3.g[b]);caption("Same size ("+fmtInt(W3.lo+1)+"–"+fmtInt(W3.hi)+" sq ft): "+(two.length===2?"3 bedrooms "+kk(mean(W3.g[3].map(i=>PR[i])))+", 4 bedrooms "+kk(mean(W3.g[4].map(i=>PR[i]))):W3.n+" houses")+".",C.orange);
+      explain("Only houses in one size range stay lit; the orange bars are their average prices by bedrooms (number of houses in brackets). Size is locked: within the range, more bedrooms no longer means a bigger house. In the 1,601–2,000 range (37 houses), 3-bedroom houses average $249k and 4-bedroom houses $247k: about no difference. Move the slider: narrow ranges hold few houses, so their comparisons bounce around. That is the problem multiple regression solves in step 4.");}
+    if(s===4){caption("Multiple regression holds size constant for all 88 houses: +$15,200 per bedroom.",C.orange);explain("Multiple regression compares houses of the same size without throwing any away. Each coloured line is its prediction for houses of one size: 1,500, 2,000, 2,500 or 3,000 sq ft. The lines are parallel: at every size, one more bedroom is associated with a price $15,200 higher, on average. The faint dashed line is the one-regressor fit, +$62,000: steeper because it also picks up the larger size of houses with more bedrooms.");}
+  };
+  go(1);
+};
+
+/* =====================================================================
+   ANIMATION 2: from a line to a plane
+   ===================================================================== */
+const S1={};
+S1.build=function(){
+  header("From a line to a plane","88 houses: bedrooms, size and sale price. Drag the picture to turn it.",2);
+  setInfo({study:"The same 88 houses sold in the Boston area in 1990. Across: bedrooms. Up: sale price. Into the screen: floor area in square feet. Colour shows size: blue for small, orange for big.",
+    todo:"Click the steps in order. Drag the picture with the mouse to turn it any way you like. In step 4, move the slider to choose which size of house to compare.",
+    look:"In step 1, the steep dashed line, +62.0, is the one-regressor fit. In step 2, the orange (big) houses sit at the right and at the top. In step 4, every slice of the plane has slope +15.2: holding size constant, one more bedroom is associated with about a quarter as much, on average."});
+  const b=M2.beta, CX=700, CY=470, SC=200;
+  const nx=v=>(v-4.5)/2.5, ny=q=>(q-2500)/1350, nz=p=>(p-420)/320;
+  const st={yaw:0,pitch:0,tyaw:0,tpitch:0,plane:0,tplane:0,line:1,tline:1,slice:0,tslice:0,qv:2000,tqv:2000,step:1};
+  function P(x,yd,z){const h=x*Math.cos(st.yaw)+yd*Math.sin(st.yaw),d=-x*Math.sin(st.yaw)+yd*Math.cos(st.yaw);const v=z*Math.cos(st.pitch)+d*Math.sin(st.pitch);return [CX+SC*h,CY-SC*v];}
+  const gAx=el("g",{}),gPlane=el("g",{}),gPts=el("g",{}),gLines=el("g",{});
+  const edges=[[[-1.1,-1,-1.05],[1.1,-1,-1.05]],[[1.1,-1,-1.05],[1.1,1.05,-1.05]],[[-1.1,-1,-1.05],[-1.1,-1,1.05]]];
+  const axL=edges.map(()=>el("line",{stroke:C.grey,"stroke-width":2},gAx));
+  const ticks=[];
+  [2,3,4,5,6,7].forEach(v=>ticks.push({p:[nx(v),-1,-1.05],t:String(v),o:[0,30]}));
+  [1500,2000,2500,3000,3500].forEach(q=>ticks.push({p:[1.1,ny(q),-1.05],t:fmtInt(q),o:[14,6],a:"start",depth:true}));
+  [200,300,400,500,600,700].forEach(p=>ticks.push({p:[-1.1,-1,nz(p)],t:"$"+p+"k",o:[-14,6],a:"end"}));
+  ticks.forEach(t=>{t.e=txt(0,0,t.t,{"font-size":16,fill:C.grey,"text-anchor":t.a||"middle"},gAx);});
+  const tX=txt(0,0,"bedrooms",{"font-size":20,fill:C.ink,"text-anchor":"middle"},gAx);
+  const tY=txt(0,0,"size (sq ft)",{"font-size":20,fill:C.ink,"text-anchor":"middle"},gAx);
+  const tZ=txt(0,0,"sale price",{"font-size":20,fill:C.ink,"text-anchor":"middle"},gAx);
+  const mesh=[];for(let v=2;v<=7;v++)mesh.push({a:[v,1150],b:[v,3850]});for(let j=0;j<=5;j++){const q=1150+j*540;mesh.push({a:[2,q],b:[7,q]});}
+  const planeFill=el("polygon",{fill:C.soft,"fill-opacity":0.10,stroke:"none"},gPlane);
+  const meshL=mesh.map(()=>el("line",{stroke:C.soft,"stroke-width":1.3,"stroke-opacity":0.7},gPlane));
+  const zP=(v,q)=>b[0]+b[1]*v+b[2]*q;
+  const pts=H.map((h,i)=>{const c=el("circle",{r:7,fill:sizeColor(SQ[i]),"fill-opacity":0.8,stroke:"#fff","stroke-width":1},gPts);
+    hoverTip(c,()=>houseTip(i)+"<br>the plane predicts "+money(zP(BD[i],SQ[i])));return c;});
+  const l1=el("line",{stroke:C.dark,"stroke-width":3.5,"stroke-dasharray":"10 7"},gLines);
+  const l1t=txt(0,0,"one regressor: +62.0 per bedroom",Object.assign({"font-size":20,fill:C.dark,"font-weight":700},HALO),gLines);
+  const QS=[1500,2000,2500,3000];
+  const ghost=QS.map(q=>el("line",{stroke:sizeColor(q),"stroke-width":2.5,"stroke-opacity":0.6},gLines));
+  const sl=el("line",{stroke:C.orange,"stroke-width":5},gLines);
+  const slt=txt(0,0,"",Object.assign({"font-size":20,fill:C.orange,"font-weight":700},HALO),gLines);
+  const lgg=el("g",{});const defs=el("defs",{},lgg);const lin=el("linearGradient",{id:"szg2",x1:0,x2:1,y1:0,y2:0},defs);
+  el("stop",{offset:"0%","stop-color":sizeColor(1200)},lin);el("stop",{offset:"100%","stop-color":sizeColor(3000)},lin);
+  el("rect",{x:1230,y:150,width:220,height:14,rx:7,fill:"url(#szg2)"},lgg);
+  txt(1230,140,"colour: size (sq ft)",{"font-size":17,fill:C.ink},lgg);txt(1230,186,"1,200",{"font-size":15,fill:C.grey},lgg);txt(1450,186,"3,000+",{"font-size":15,fill:C.grey,"text-anchor":"end"},lgg);
+  const rd=el("g",{});const rdT=[0,1,2].map(k=>txt(1230,250+k*34,"",{"font-size":21,fill:C.ink},rd));
+  makeCaption();
+  let drag=null;svg.addEventListener("pointerdown",S1.down=e=>{drag={x:e.clientX,y:e.clientY};});
+  window.addEventListener("pointermove",S1.move=e=>{if(!drag)return;const k=Math.PI/700;st.tyaw=Math.max(-1.45,Math.min(1.45,st.tyaw+(e.clientX-drag.x)*k));st.tpitch=Math.max(-0.2,Math.min(1.2,st.tpitch+(e.clientY-drag.y)*k));drag={x:e.clientX,y:e.clientY};});
+  window.addEventListener("pointerup",S1.up=()=>{drag=null;});
+  function go(n){st.step=n;
+    if(n===1){st.tyaw=0;st.tpitch=0;st.tplane=0;st.tline=1;st.tslice=0;}
+    if(n===2){st.tyaw=-0.55;st.tpitch=0.45;st.tplane=0;st.tline=0;st.tslice=0;}
+    if(n===3){st.tyaw=-0.55;st.tpitch=0.45;st.tplane=1;st.tline=0;st.tslice=0;}
+    if(n===4){st.tyaw=0;st.tpitch=0;st.tplane=0;st.tline=1;st.tslice=1;}
+  }
+  const sb=[button("1 · One regressor",()=>go(1),true),button("2 · Add size",()=>go(2)),button("3 · Fit the plane",()=>go(3)),button("4 · Hold size constant",()=>go(4))];group(sb);
+  sep();button("Front view",()=>{st.tyaw=0;st.tpitch=0;});
+  slider("size (sq ft)",1200,3800,2000,50,v=>{st.tqv=v;});
+  S1.frame=function(dt){
+    const k=ez(dt,0.32);st.yaw+=(st.tyaw-st.yaw)*k;st.pitch+=(st.tpitch-st.pitch)*k;st.plane+=(st.tplane-st.plane)*k;st.line+=(st.tline-st.line)*k;st.slice+=(st.tslice-st.slice)*k;st.qv+=(st.tqv-st.qv)*ez(dt,0.15);
+    edges.forEach((e,i)=>{const a=P(...e[0]),c=P(...e[1]);axL[i].setAttribute("x1",a[0]);axL[i].setAttribute("y1",a[1]);axL[i].setAttribute("x2",c[0]);axL[i].setAttribute("y2",c[1]);});
+    const dop=Math.min(1,Math.abs(Math.sin(st.yaw))*2.5).toFixed(3);ticks.forEach(t=>{const p=P(...t.p);t.e.setAttribute("x",p[0]+t.o[0]);t.e.setAttribute("y",p[1]+t.o[1]);if(t.depth)t.e.setAttribute("opacity",dop);});
+    let p=P(0,-1,-1.05);tX.setAttribute("x",p[0]);tX.setAttribute("y",p[1]+58);
+    p=P(1.1,0.3,-1.05);tY.setAttribute("x",p[0]+110);tY.setAttribute("y",p[1]+40);tY.setAttribute("opacity",dop);
+    p=P(-1.1,-1,1.05);tZ.setAttribute("x",p[0]);tZ.setAttribute("y",p[1]-18);
+    pts.forEach((c,i)=>{const q=P(nx(BD[i]),ny(SQ[i]),nz(PR[i]));c.setAttribute("cx",q[0]);c.setAttribute("cy",q[1]);
+      const near=Math.abs(SQ[i]-st.qv)<=200;c.setAttribute("fill-opacity",(0.8*(1-st.slice)+st.slice*(near?0.95:0.12)).toFixed(3));c.setAttribute("r",(7+st.slice*(near?2:0)).toFixed(2));});
+    const cs=[[2,1150],[7,1150],[7,3850],[2,3850]].map(([v,q])=>P(nx(v),ny(q),nz(zP(v,q))));
+    planeFill.setAttribute("points",cs.map(q=>q.join(",")).join(" "));planeFill.setAttribute("fill-opacity",(0.12*st.plane).toFixed(3));
+    mesh.forEach((m,i)=>{const a=P(nx(m.a[0]),ny(m.a[1]),nz(zP(m.a[0],m.a[1]))),c=P(nx(m.b[0]),ny(m.b[1]),nz(zP(m.b[0],m.b[1])));const L=meshL[i];L.setAttribute("x1",a[0]);L.setAttribute("y1",a[1]);L.setAttribute("x2",c[0]);L.setAttribute("y2",c[1]);L.setAttribute("stroke-opacity",(0.7*st.plane).toFixed(3));});
+    const m1=M1.beta;let a=P(nx(2),ny(2014),nz(m1[0]+m1[1]*2)),c=P(nx(7),ny(2014),nz(m1[0]+m1[1]*7));
+    l1.setAttribute("x1",a[0]);l1.setAttribute("y1",a[1]);l1.setAttribute("x2",c[0]);l1.setAttribute("y2",c[1]);l1.setAttribute("opacity",st.line.toFixed(3));
+    l1t.setAttribute("x",c[0]+12);l1t.setAttribute("y",c[1]+6);l1t.setAttribute("opacity",st.line.toFixed(3));
+    QS.forEach((q,i)=>{const a2=P(nx(2),ny(q),nz(zP(2,q))),c2=P(nx(7),ny(q),nz(zP(7,q)));const L=ghost[i];L.setAttribute("x1",a2[0]);L.setAttribute("y1",a2[1]);L.setAttribute("x2",c2[0]);L.setAttribute("y2",c2[1]);L.setAttribute("opacity",(0.8*st.slice).toFixed(3));});
+    a=P(nx(2),ny(st.qv),nz(zP(2,st.qv)));c=P(nx(7),ny(st.qv),nz(zP(7,st.qv)));
+    sl.setAttribute("x1",a[0]);sl.setAttribute("y1",a[1]);sl.setAttribute("x2",c[0]);sl.setAttribute("y2",c[1]);sl.setAttribute("opacity",st.slice.toFixed(3));
+    slt.textContent=fmtInt(Math.round(st.qv/50)*50)+" sq ft houses: slope +15.2";slt.setAttribute("x",c[0]+12);slt.setAttribute("y",c[1]+6);slt.setAttribute("opacity",st.slice.toFixed(3));
+    const s=st.step;
+    rdT[0].textContent=s>=3?"price = −19.3 + 15.2 × bedrooms":"price = 72.2 + 62.0 × bedrooms";
+    rdT[1].textContent=s>=3?"             + 0.128 × sq ft":"";
+    rdT[2].textContent=s===4?"within 200 sq ft of "+fmtInt(Math.round(st.qv/50)*50)+": "+SQ.filter(q=>Math.abs(q-st.qv)<=200).length+" houses lit":"";
+    if(s===1){caption("One regressor: price on bedrooms, +$62,000 per bedroom.");explain("This is the one-regressor picture: bedrooms across, price up. The dashed line is price = 72.2 + 62.0 × bedrooms. The colours hint at a third variable: orange houses are big. Look where they sit.");}
+    if(s===2){caption("Turn the picture: size is the third axis. Big (orange) houses cost more and have more bedrooms.");explain("Now the third axis, size in square feet, runs into the screen. Big houses (orange) sit high: higher prices. They also lean toward more bedrooms. So in the flat picture, moving right meant moving toward big houses too. Drag to turn it yourself.");}
+    if(s===3){caption("OLS fits a plane: the one with the smallest sum of squared residuals.");explain("With two regressors OLS fits a plane, not a line: price = −19.3 + 15.2 × bedrooms + 0.128 × sq ft. Along the bedrooms edge the plane rises $15,200 per bedroom; along the size edge it rises $128 per square foot. Drag to look along each edge.");}
+    if(s===4){caption("Same size: every slice has slope +15.2. One regressor said +62.0.",C.orange);explain("Back to the front view. Each coloured line is the plane at one size: 1,500, 2,000, 2,500 or 3,000 sq ft. They are parallel: at any size, one more bedroom is associated with a price $15,200 higher, on average. The lit dots are houses within 200 sq ft of the slider's size. The dashed line, +62.0, is steeper because it also picks up the larger size of houses with more bedrooms.");}
+  };
+  go(1);
+};
+S1.cleanup=function(){svg.removeEventListener("pointerdown",S1.down);window.removeEventListener("pointermove",S1.move);window.removeEventListener("pointerup",S1.up);};
+
+/* =====================================================================
+   ANIMATION 3: how R holds size constant (partialling out)
+   ===================================================================== */
+const S2={};
+S2.build=function(){
+  header("How R holds size constant","Keep only the variation in bedrooms not explained by size.",3);
+  setInfo({study:"The same 88 houses. Step 1 predicts each house's number of bedrooms from its size. The residual is the bedrooms left over: more or fewer bedrooms than houses of that size usually have.",
+    todo:"Click the four steps in order. Then switch between “raw bedrooms” and “residual bedrooms” to compare the two slopes.",
+    look:"The slope of price on the residual bedrooms is +15.2, exactly the multiple-regression coefficient. On raw bedrooms it is +62.0."});
+  const aux=ols([ONE,SQ],BD), R=BD.map((v,i)=>v-aux.fit[i]), RC=BD.map(v=>v-BBAR);
+  const sR=ols([ONE,R],PR).beta[1], sC=ols([ONE,RC],PR).beta[1];
+  const X0=150,X1=1060,T=170,B=760;
+  const ax=q=>X0+(q-1100)/2900*(X1-X0), ay=v=>B-(v-1.5)/6*(B-T);
+  const bx=v=>X0+(v+2.5)/6*(X1-X0), by=p=>B-(p-100)/650*(B-T);
+  const gA=el("g",{}),gB=el("g",{});gB.style.opacity=0;
+  el("line",{x1:X0,y1:B,x2:X1,y2:B,stroke:C.grey,"stroke-width":2},gA);el("line",{x1:X0,y1:T,x2:X0,y2:B,stroke:C.grey,"stroke-width":2},gA);
+  [1500,2000,2500,3000,3500].forEach(q=>txt(ax(q),B+30,fmtInt(q),{"font-size":16,fill:C.grey,"text-anchor":"middle"},gA));
+  [2,3,4,5,6,7].forEach(v=>txt(X0-12,ay(v)+6,String(v),{"font-size":16,fill:C.grey,"text-anchor":"end"},gA));
+  txt((X0+X1)/2,B+66,"size (sq ft)",{"font-size":20,"text-anchor":"middle"},gA);
+  txt(X0-60,(T+B)/2,"bedrooms",{"font-size":20,"text-anchor":"middle",transform:"rotate(-90 "+(X0-60)+" "+((T+B)/2)+")"},gA);
+  el("line",{x1:X0,y1:B,x2:X1,y2:B,stroke:C.grey,"stroke-width":2},gB);el("line",{x1:X0,y1:T,x2:X0,y2:B,stroke:C.grey,"stroke-width":2},gB);
+  [-2,-1,0,1,2,3].forEach(v=>txt(bx(v),B+30,(v>0?"+":(v<0?"−":""))+Math.abs(v),{"font-size":16,fill:C.grey,"text-anchor":"middle"},gB));
+  [200,300,400,500,600,700].forEach(p=>txt(X0-12,by(p)+6,"$"+p+"k",{"font-size":16,fill:C.grey,"text-anchor":"end"},gB));
+  const bLab=txt((X0+X1)/2,B+66,"",{"font-size":20,"text-anchor":"middle"},gB);
+  txt(X0-74,(T+B)/2,"sale price",{"font-size":20,"text-anchor":"middle",transform:"rotate(-90 "+(X0-74)+" "+((T+B)/2)+")"},gB);
+  el("line",{x1:bx(0),y1:T,x2:bx(0),y2:B,stroke:C.pale,"stroke-width":1.5},gB);
+  const gSt=el("g",{});gSt.style.opacity=0;gSt.style.transition="opacity .5s";
+  H.forEach((h,i)=>el("line",{x1:ax(SQ[i]),y1:ay(aux.fit[i]),x2:ax(SQ[i]),y2:ay(BD[i]),stroke:R[i]>0?C.blue:C.grey,"stroke-width":2,"stroke-opacity":0.7},gSt));
+  const auxL=el("line",{x1:ax(1100),y1:ay(aux.beta[0]+aux.beta[1]*1100),x2:ax(4000),y2:ay(aux.beta[0]+aux.beta[1]*4000),stroke:C.dark,"stroke-width":3.5});auxL.style.opacity=0;auxL.style.transition="opacity .5s";
+  const auxT=txt(ax(3300),ay(aux.beta[0]+aux.beta[1]*3300)+46,"bedrooms predicted from size",Object.assign({"font-size":19,fill:C.dark,"font-weight":700,"text-anchor":"middle"},HALO));auxT.style.opacity=0;auxT.style.transition="opacity .5s";
+  const fitL=el("line",{stroke:C.orange,"stroke-width":4.5});fitL.style.opacity=0;
+  const fitT=txt(0,0,"",Object.assign({"font-size":22,fill:C.orange,"font-weight":700},HALO));fitT.style.opacity=0;
+  const gP=el("g",{});
+  const pts=H.map((h,i)=>{const c=el("circle",{r:6.5,fill:sizeColor(SQ[i]),"fill-opacity":0.8,stroke:"#fff","stroke-width":1},gP);
+    hoverTip(c,()=>houseTip(i)+"<br>bedrooms predicted from size: "+f1(aux.fit[i])+"<br>residual: "+sgn(R[i])+" bedrooms");return c;});
+  const rx=1120;const rec=el("g",{});
+  el("rect",{x:rx,y:160,width:440,height:470,rx:12,fill:"#fff",stroke:"#D4D8DE","stroke-width":1.5},rec);
+  txt(rx+22,200,"The recipe",{"font-size":22,"font-weight":700,fill:C.blue},rec);
+  const steps=["1. Regress bedrooms on size.","2. Residual = bedrooms − predicted:","    the variation not explained by size.","3. Put each house at its residual.","4. Regress price on the residual.","    The slope is 15.2, as in the full regression."];
+  const sT=steps.map((s,k)=>txt(rx+22,250+k*40,s,{"font-size":19,fill:C.grey},rec));
+  const code=["step1 <- lm(bdrms ~ sqrft, data = hprice1)","hprice1$bd_left <- resid(step1)","lm(price ~ bd_left, data = hprice1)"];
+  code.forEach((s,k)=>txt(rx+22,520+k*30,s,{"font-size":15,fill:C.ink,"font-family":"Consolas,monospace"},rec));
+  const st={t:0,tt:0,x:1,tx:1,line:0,tline:0,step:1};
+  makeCaption();
+  function go(n){st.step=n;
+    auxL.style.opacity=n<=2?1:0;auxT.style.opacity=n<=2?1:0;gSt.style.opacity=n===2?1:0;
+    st.tt=n>=3?1:0;st.tline=n>=4?1:0;if(n===3){st.tx=1;mode[1].classList.add("on");mode[0].classList.remove("on");}
+    sT.forEach((e,k)=>{const on=(n===1&&k===0)||(n===2&&(k===1||k===2))||(n===3&&k===3)||(n===4&&(k===4||k===5));e.setAttribute("fill",on?C.orange:C.grey);e.setAttribute("font-weight",on?700:400);});
+  }
+  const sb=[button("1 · Regress bedrooms on size",()=>go(1),true),button("2 · Keep the residuals",()=>go(2)),button("3 · Move each house",()=>go(3)),button("4 · Regress price on them",()=>go(4))];group(sb);
+  sep();const mode=[button("raw bedrooms",()=>{st.tx=0;if(st.step<3)sb[3].click();}),button("residual bedrooms",()=>{st.tx=1;if(st.step<3)sb[3].click();},true)];group(mode);
+  S2.frame=function(dt){
+    const k=ez(dt,0.38);st.t+=(st.tt-st.t)*k;st.x+=(st.tx-st.x)*k;st.line+=(st.tline-st.line)*k;
+    const e=ease(Math.min(1,Math.max(0,st.t)));
+    gA.style.opacity=(1-e).toFixed(3);gB.style.opacity=e.toFixed(3);
+    pts.forEach((c,i)=>{const v=RC[i]+(R[i]-RC[i])*st.x;const xA=ax(SQ[i]),yA=ay(BD[i]),xB=bx(v),yB=by(PR[i]);c.setAttribute("cx",xA+(xB-xA)*e);c.setAttribute("cy",yA+(yB-yA)*e);});
+    const slope=sC+(sR-sC)*st.x;fitL.setAttribute("x1",bx(-2.4));fitL.setAttribute("y1",by(YBAR+slope*-2.4));fitL.setAttribute("x2",bx(3.4));fitL.setAttribute("y2",by(YBAR+slope*3.4));fitL.style.opacity=(st.line*e).toFixed(3);
+    fitT.textContent="slope "+sgn(slope);fitT.setAttribute("x",bx(1.6));fitT.setAttribute("y",by(YBAR+slope*1.6)-30);fitT.style.opacity=(st.line*e).toFixed(3);
+    bLab.textContent=st.tx>0.5?"residual bedrooms (not explained by size)":"bedrooms minus their average";
+    const s=st.step;
+    if(s===1){caption("Bigger houses have more bedrooms: about 0.8 more per 1,000 sq ft.");explain("Each dot is a house: size across, bedrooms up. The dark line predicts bedrooms from size (+0.77 bedrooms per 1,000 sq ft). This is step 1 of the recipe.");}
+    if(s===2){caption("Residual: more bedrooms (dark blue) or fewer (grey) than size predicts.");explain("Each stick is a residual: the house's bedrooms minus the bedrooms predicted from its size. Dark blue sticks: more bedrooms than houses of that size usually have (smaller rooms). Grey: fewer (bigger rooms). This residual is uncorrelated with size.");}
+    if(s===3){caption("Each house moves to its residual bedrooms; up is now the sale price.");explain("The dots glide to a new picture: across is the residual bedrooms, up is the price. A house at 0 has exactly the bedrooms its size predicts.");}
+    if(s===4){const r=st.tx>0.5;caption(r?"Price on residual bedrooms: slope +15.2, the same as the multiple regression.":"Price on raw bedrooms: slope +62.0, the one-regressor fit.",r?C.orange:C.dark);
+      explain(r?"Regress price on the residual bedrooms: the slope is +15.2, the same number as the multiple regression. Holding size constant means using only the variation in bedrooms that size does not explain. Click “raw bedrooms” to compare.":"With raw bedrooms the slope is +62.0: raw bedrooms still carry the size differences, so the slope picks up the value of the extra space too. Click “residual bedrooms” to remove them.");}
+  };
+  go(1);
+};
+
+/* =====================================================================
+   ANIMATION 4: sums of squares and R-squared
+   ===================================================================== */
+const S3={};
+S3.build=function(){
+  header("How well does a regression fit?","Each house's distance from the average price splits into an explained part and a residual.",4);
+  setInfo({study:"The same 88 houses. Across: the price a model predicts. Up: the actual price. On the orange diagonal, predicted equals actual. The dashed line is the average price, $293,500. Prices are in $1000s.",
+    todo:"Click the steps in order. Then switch models. Hover over a dot to see its two squares.",
+    look:"TSS never changes: it depends only on the prices. Adding size moves the dots out along the diagonal: the explained part grows and the residuals shrink, so R² rises from 0.26 to 0.63."});
+  const X0=150,S=0.88,LO=100,HI=750; const px=v=>X0+(v-LO)*S, py=v=>756-(v-LO)*S;
+  const gAx=el("g",{});
+  el("line",{x1:px(LO),y1:py(LO),x2:px(HI),y2:py(LO),stroke:C.grey,"stroke-width":2},gAx);el("line",{x1:px(LO),y1:py(LO),x2:px(LO),y2:py(HI),stroke:C.grey,"stroke-width":2},gAx);
+  [200,300,400,500,600,700].forEach(v=>{txt(px(v),py(LO)+28,"$"+v+"k",{"font-size":16,fill:C.grey,"text-anchor":"middle"},gAx);txt(px(LO)-10,py(v)+6,"$"+v+"k",{"font-size":16,fill:C.grey,"text-anchor":"end"},gAx);});
+  txt(px(425),py(LO)+62,"predicted price",{"font-size":20,"text-anchor":"middle"},gAx);
+  txt(px(LO)-72,py(425),"actual price",{"font-size":20,"text-anchor":"middle",transform:"rotate(-90 "+(px(LO)-72)+" "+py(425)+")"},gAx);
+  el("line",{x1:px(LO),y1:py(LO),x2:px(HI),y2:py(HI),stroke:C.orange,"stroke-width":2.5,"stroke-opacity":0.8},gAx);
+  el("line",{x1:px(LO),y1:py(YBAR),x2:px(HI),y2:py(YBAR),stroke:C.ink,"stroke-width":2,"stroke-dasharray":"8 6"},gAx);
+  txt(px(HI)+8,py(YBAR)+6,"mean",{"font-size":18,fill:C.ink,"font-weight":700},gAx);
+  const band=el("polygon",{fill:C.orange,"fill-opacity":0.07,stroke:"none"});
+  const gSeg=el("g",{}),gSq=el("g",{}),gP=el("g",{});
+  const seE=H.map(()=>el("line",{stroke:C.soft,"stroke-width":2,"stroke-opacity":0.55},gSeg));
+  const seR=H.map(()=>el("line",{stroke:C.orange,"stroke-width":2,"stroke-opacity":0.55},gSeg));
+  const sqE=el("rect",{fill:C.soft,"fill-opacity":0.22,stroke:C.soft,"stroke-width":1.5},gSq),sqR=el("rect",{fill:C.orange,"fill-opacity":0.22,stroke:C.orange,"stroke-width":1.5},gSq);gSq.style.opacity=0;
+  let hov=-1;
+  const pts=H.map((h,i)=>{const c=el("circle",{r:6,fill:C.blue,"fill-opacity":0.7,stroke:"#fff","stroke-width":0.8},gP);
+    c.style.cursor="help";c.addEventListener("mousemove",e=>{hov=i;showTip(e,tipFor(i));});c.addEventListener("mouseleave",()=>{hov=-1;hideTip();});return c;});
+  const RX=880,BW=620,gR=el("g",{});
+  txt(RX,190,"Sums of squares (all 88 houses)",{"font-size":22,"font-weight":700,fill:C.blue},gR);
+  const rows=[{n:"TSS",d:"total: squared deviations from the mean",y:250},{n:"ESS",d:"explained: squared explained parts",y:330},{n:"SSR",d:"residual: squared residuals",y:410}];
+  rows.forEach(r=>{r.bar=el("rect",{x:RX,y:r.y,width:0,height:30,rx:4,fill:r.n==="TSS"?C.ink:(r.n==="ESS"?C.soft:C.orange)},gR);
+    r.lab=txt(RX,r.y-8,r.n+"  "+r.d,{"font-size":18,fill:C.ink},gR);r.val=txt(RX,r.y+23,"",{"font-size":18,fill:"#fff","font-weight":700},gR);
+    hoverTip(r.bar,()=>"<b>"+r.n+"</b>: "+r.d+"<br>= "+fmtInt(cur[r.n])+(r.n==="TSS"?"<br>depends only on the prices, not on the model":"<br>"+(100*cur[r.n]/cur.TSS).toFixed(1)+"% of TSS"));});
+  const r2T=txt(RX,510,"",{"font-size":30,"font-weight":700,fill:C.dark},gR);
+  const r2S=txt(RX,548,"",{"font-size":19,fill:C.ink},gR);
+  const serT=txt(RX,610,"",{"font-size":24,"font-weight":700,fill:C.dark},gR);
+  const serS=txt(RX,646,"",{"font-size":19,fill:C.ink},gR);
+  const modT=txt(RX,700,"",{"font-size":19,fill:C.blue,"font-weight":600},gR);
+  gR.style.transition="opacity .5s";
+  let seed=17;
+  function fitModel(m){let fit,k,label;
+    if(m===1){fit=M1.fit;k=1;label="price on bedrooms";}
+    else if(m===2){fit=M2.fit;k=2;label="price on bedrooms and size";}
+    else{const r=rng(seed);const J=H.map(()=>normal(r));fit=ols([ONE,BD,SQ,J],PR).fit;k=3;label="bedrooms, size and random numbers";}
+    const TSS=PR.reduce((s,y)=>s+(y-YBAR)**2,0),ESS=fit.reduce((s,f)=>s+(f-YBAR)**2,0),SSR=PR.reduce((s,y,i)=>s+(y-fit[i])**2,0);
+    return {fit,k,label,TSS,ESS,SSR,R2:1-SSR/TSS,SER:Math.sqrt(SSR/(N-k-1)),m};}
+  let tgt=fitModel(1),cur={fit:tgt.fit.slice(),TSS:tgt.TSS,ESS:tgt.ESS,SSR:tgt.SSR,R2:tgt.R2,SER:tgt.SER};
+  const st={step:1,seg:0,tseg:0,split:0,tsplit:0,bars:0,tbars:0};
+  function tipFor(i){const f=cur.fit[i],u=PR[i]-f;return houseTip(i)+"<br>predicted "+money(f)+"<br><span style='color:#4A6FD4'>explained "+sgn(f-YBAR)+"</span><br><span style='color:#FA4616'>residual "+sgn(u)+"</span><br>squares: "+fmtInt((f-YBAR)**2)+" + "+fmtInt(u*u)+" ($1000s²)";}
+  makeCaption();
+  function go(n){st.step=n;st.tseg=n>=1?1:0;st.tsplit=n>=2?1:0;st.tbars=n>=3?1:0;}
+  const sb=[button("1 · Total: deviation from the mean",()=>go(1),true),button("2 · Split: explained + residual",()=>go(2)),button("3 · Square and add up",()=>go(3))];group(sb);
+  sep();
+  const mb=[button("Bedrooms only",()=>{tgt=fitModel(1);},true),button("+ size",()=>{tgt=fitModel(2);})];group(mb);
+  S3.frame=function(dt){
+    const k=ez(dt,0.35);st.seg+=(st.tseg-st.seg)*k;st.split+=(st.tsplit-st.split)*k;st.bars+=(st.tbars-st.bars)*k;
+    for(let i=0;i<N;i++)cur.fit[i]+=(tgt.fit[i]-cur.fit[i])*k;
+    ["TSS","ESS","SSR","R2","SER"].forEach(q=>cur[q]+=(tgt[q]-cur[q])*k);
+    for(let i=0;i<N;i++){const x=px(cur.fit[i]);pts[i].setAttribute("cx",x);pts[i].setAttribute("cy",py(PR[i]));
+      const mid=py(YBAR)+(py(cur.fit[i])-py(YBAR))*st.split;
+      seE[i].setAttribute("x1",x);seE[i].setAttribute("x2",x);seE[i].setAttribute("y1",py(YBAR));seE[i].setAttribute("y2",mid);
+      seR[i].setAttribute("x1",x);seR[i].setAttribute("x2",x);seR[i].setAttribute("y1",mid);seR[i].setAttribute("y2",py(PR[i]));
+      seE[i].setAttribute("stroke",st.split>0.5?C.soft:C.ink);seR[i].setAttribute("stroke",st.split>0.5?C.orange:C.ink);}
+    gSeg.style.opacity=st.seg.toFixed(3);
+    const s=cur.SER;band.setAttribute("points",[[LO,LO+s],[HI-s,HI],[HI,HI],[HI,HI-s],[LO+s,LO],[LO,LO]].map(([a,b])=>px(a)+","+py(b)).join(" "));band.setAttribute("fill-opacity",(0.08*st.bars).toFixed(3));
+    if(hov>=0&&st.split>0.5){const f=cur.fit[hov],x=px(f),e=(f-YBAR)*S,u=(PR[hov]-f)*S;gSq.style.opacity=1;
+      sqE.setAttribute("x",x-Math.abs(e));sqE.setAttribute("width",Math.abs(e));sqE.setAttribute("y",Math.min(py(YBAR),py(f)));sqE.setAttribute("height",Math.abs(e));
+      sqR.setAttribute("x",x);sqR.setAttribute("width",Math.abs(u));sqR.setAttribute("y",Math.min(py(f),py(PR[hov])));sqR.setAttribute("height",Math.abs(u));}
+    else gSq.style.opacity=0;
+    gR.style.opacity=st.bars.toFixed(3);
+    const sc=BW/cur.TSS;rows.forEach(r=>{const v=cur[r.n];r.bar.setAttribute("width",Math.max(2,v*sc));r.val.textContent=fmtInt(v);r.val.setAttribute("x",RX+8);if(v*sc<110){r.val.setAttribute("fill",C.ink);r.val.setAttribute("x",RX+v*sc+8);}else r.val.setAttribute("fill","#fff");});
+    r2T.textContent="R² = ESS / TSS = "+cur.R2.toFixed(4);r2S.textContent="= 1 − SSR / TSS: the share of the variation in prices the model predicts";
+    serT.textContent="SER = "+money(cur.SER);serS.textContent="shaded band: ± one SER around the diagonal";
+    modT.textContent="Model: "+tgt.label;
+    const n=st.step;
+    if(n===1){caption("Each stick: a house's deviation from the mean price.");explain("Each vertical stick runs from the average price (dashed line) to the house's actual price. Square these and add them up: that is TSS, the total variation in prices. It is the same whatever model we use.");}
+    if(n===2){caption("Blue: the explained part. Orange: the residual.");explain("Each stick is split at the predicted price. The blue part is the explained part. The orange part is the residual. Hover over a dot to see its two parts drawn as squares. Switch models: with size the dots spread along the diagonal and the blue parts grow.");}
+    if(n===3){caption("R² = "+cur.R2.toFixed(3)+": the share of TSS the model explains.",C.dark);
+      explain("Square every blue part and add: ESS. Square every orange part and add: SSR. TSS = ESS + SSR. R² = ESS/TSS. Bedrooms alone: 0.258. Adding size: 0.632, and the SER (the typical size of a residual) falls from $89,000 to $63,000.");}
+  };
+  go(1);
+};
+
+/* ===================================================================== */
+const SCENES=[S0,S1,S2,S3];let cur=0,last=performance.now();
+function show(i){hideTip();if(SCENES[cur].cleanup)SCENES[cur].cleanup();cur=(i+SCENES.length)%SCENES.length;svg.innerHTML="";ctl.innerHTML="";capEl=null;SCENES[cur].frame=null;SCENES[cur].build();
+  svg.style.animation="none";void svg.getBoundingClientRect();svg.style.animation="fadein .35s ease-out";}
+function tick(t){const dt=Math.min(0.1,Math.max(0,(t-last)/1000));last=t;if(SCENES[cur].frame)SCENES[cur].frame(dt);}
+function loop(t){tick(t);requestAnimationFrame(loop);}
+// backstop when requestAnimationFrame is throttled (hidden tabs)
+setInterval(()=>{const t=performance.now();if(t-last>250)tick(t);},250);
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;if(e.key==="ArrowRight")show(cur+1);else if(e.key==="ArrowLeft")show(cur-1);else if(e.key==="i"||e.key==="I")toggleInfo();else if(e.key==="f"||e.key==="F"){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}});
+show(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>

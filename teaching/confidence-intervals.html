@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Confidence Intervals</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --blue:#0021A5; --soft:#4A6FD4; --orange:#FA4616; --ink:#4B5563; --grey:#9AA1AE; --bg:#FCFCFE; }
+  html,body{margin:0;height:100%;background:var(--bg);font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;overflow:hidden;color:var(--ink)}
+  #stage{position:absolute;inset:0 0 86px 0;display:flex;align-items:center;justify-content:center}
+  svg{width:100vw;height:calc(56.25vw);max-height:calc(100vh - 86px);max-width:calc((100vh - 86px)*1.7778)}
+  #controls{position:fixed;left:0;right:0;bottom:30px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;padding:0 16px}
+  #controls button{font:inherit;font-size:15px;padding:7px 14px;border-radius:8px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #controls button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  #controls label{font-size:15px;display:flex;align-items:center;gap:8px}
+  #controls input[type=range]{width:240px;accent-color:var(--orange)}
+  #help{position:fixed;left:16px;bottom:6px;font-size:12px;color:var(--grey)}
+  #tip{position:fixed;z-index:6;pointer-events:none;display:none;max-width:300px;background:#fff;border:1.5px solid #D4D8DE;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,0.12);padding:8px 11px;font-size:15px;line-height:1.4;color:var(--ink)}
+  text{font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif}
+  #infoBtn{position:fixed;top:12px;right:16px;z-index:5;font:inherit;font-size:15px;padding:6px 14px;border-radius:20px;border:1.5px solid var(--soft);background:#fff;color:var(--blue);cursor:pointer}
+  #infoBtn.on{background:var(--blue);color:#fff}
+  #info{position:fixed;top:56px;right:16px;width:min(400px,90vw);max-height:calc(100vh - 160px);overflow:auto;z-index:4;background:rgba(255,255,255,0.97);border:1.5px solid #D4D8DE;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,0.12);padding:16px 18px;font-size:15px;line-height:1.45;display:none}
+  #info.show{display:block}
+  #info h3{margin:12px 0 4px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:var(--grey)}
+  #info h3:first-child{margin-top:0}
+  #info p{margin:0 0 4px}
+  #info .now{background:#FFF4EF;border-left:4px solid var(--orange);padding:8px 10px;border-radius:6px}
+  /* smooth motion: new marks fade in, scenes fade in */
+  .pop{animation:pop .35s ease-out backwards;transform-box:fill-box;transform-origin:center}
+  @keyframes pop{from{opacity:0;transform:scaleY(0.2)}}
+  @keyframes fadein{from{opacity:0}}
+</style>
+</head>
+<body>
+<div id="stage"><svg id="svg" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div id="controls"></div>
+<button id="infoBtn" title="Show or hide the explanation (I)">&#9432; Explain</button>
+<div id="info"><h3>The study</h3><p id="iStudy"></p><h3>What to do</h3><p id="iDo"></p><h3>Look for</h3><p id="iLook"></p><h3>What you are seeing now</h3><p id="iNow" class="now"></p></div>
+<div id="tip"></div>
+<div id="help">&rarr; &larr;: switch animation &nbsp;·&nbsp; F: full screen &nbsp;·&nbsp; I or &#9432;: explanation &nbsp;·&nbsp; use the buttons and sliders below the picture &nbsp;·&nbsp; hover over a shaded area for what it means</div>
+<script>
+const C={blue:"#0021A5",soft:"#4A6FD4",orange:"#FA4616",ink:"#4B5563",grey:"#9AA1AE",pale:"#E5E7EB",dark:"#1F2937"};
+const NS="http://www.w3.org/2000/svg", svg=document.getElementById("svg"), ctl=document.getElementById("controls");
+function el(tag,a,p){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e;}
+function txt(x,y,s,a,p){const e=el("text",Object.assign({x,y,"font-size":22,fill:C.ink},a||{}),p);e.textContent=s;return e;}
+function ez(dt,tau){return 1-Math.exp(-dt/tau);}
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function normal(r){let u=0,v=0;while(u===0)u=r();v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+// complementary error function (Numerical Recipes erfcc, fractional error < 1.2e-7)
+function erfc(x){const z=Math.abs(x),t=1/(1+0.5*z);const r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))));return x>=0?r:2-r;}
+function Phi(z){return 0.5*erfc(-z/Math.SQRT2);}
+function pTwo(t){return erfc(Math.abs(t)/Math.SQRT2);}
+function dnorm(z){return Math.exp(-z*z/2)/Math.sqrt(2*Math.PI);}
+function fmtP(p){if(p===0||p<1e-15)return "essentially 0";if(p>=0.001)return p.toFixed(3);const e=Math.floor(Math.log10(p));const m=p/Math.pow(10,e);const sup={"-":"⁻","0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"};return m.toFixed(1)+" × 10"+String(e).split("").map(c=>sup[c]).join("");}
+function header(t,s,n){txt(70,70,t,{"font-size":38,"font-weight":700,fill:C.blue});txt(70,108,s,{"font-size":22,fill:C.ink});txt(1530,70,"Animation "+n+" of 2",{"font-size":18,fill:C.grey,"text-anchor":"end"});}
+const tipEl=document.getElementById("tip");
+function hoverTip(node,fn){node.style.cursor="help";
+  node.addEventListener("mousemove",e=>{tipEl.innerHTML=fn();tipEl.style.display="block";
+    tipEl.style.left=Math.min(e.clientX+16,window.innerWidth-320)+"px";tipEl.style.top=Math.min(e.clientY+16,window.innerHeight-140)+"px";});
+  node.addEventListener("mouseleave",()=>{tipEl.style.display="none";});}
+let capEl=null;function caption(s,col){if(!capEl)return;capEl.textContent=s;capEl.setAttribute("fill",col||C.dark);}
+function makeCaption(){capEl=txt(800,860,"",{"font-size":26,"text-anchor":"middle","font-weight":600});}
+function button(label,fn,on){const b=document.createElement("button");b.textContent=label;if(on)b.classList.add("on");b.onclick=()=>fn(b);ctl.appendChild(b);return b;}
+function group(btns){btns.forEach(b=>b.addEventListener("click",()=>{btns.forEach(x=>x.classList.remove("on"));b.classList.add("on");}));}
+// explanation panel: hidden until the student clicks "Explain" (or presses I)
+const infoEl=document.getElementById("info"),infoBtn=document.getElementById("infoBtn");
+function toggleInfo(){infoEl.classList.toggle("show");infoBtn.classList.toggle("on");}
+infoBtn.onclick=toggleInfo;
+function setInfo(o){document.getElementById("iStudy").innerHTML=o.study;document.getElementById("iDo").innerHTML=o.todo;document.getElementById("iLook").innerHTML=o.look;lastNow="";}
+let lastNow="";function explain(h){if(h===lastNow)return;lastNow=h;document.getElementById("iNow").innerHTML=h;}
+function pct(x,d){return (100*x).toFixed(d===undefined?1:d)+"%";}
+function slider(label,min,max,val,step,fn){const l=document.createElement("label");l.textContent=label;const r=document.createElement("input");r.type="range";r.min=min;r.max=max;r.value=val;r.step=step;r.oninput=()=>fn(+r.value);l.appendChild(r);ctl.appendChild(l);return r;}
+
+/* =====================================================================
+   ANIMATION 1: which values of Knueppel's true rate would a test keep?
+   ===================================================================== */
+const S1={};
+S1.build=function(){
+  header("The values a test would keep","Kon Knueppel, 2025-26 rookie season: made 273 of 642 threes, 42.5%. Test H₀: μ = μ₀ for many values of μ₀.",1);
+  const Y=273/642, SE=Math.sqrt(Y*(1-Y)/642), A=0.33, Bn=0.53, X0=140, X1=1460, Yl=520;
+  const sx=v=>X0+(v-A)/(Bn-A)*(X1-X0);
+  const lo=Y-1.96*SE, hi=Y+1.96*SE;
+  // zones (hidden until revealed)
+  const zone=el("g",{});zone.style.opacity=0;zone.style.pointerEvents="none";zone.style.transition="opacity .45s ease";
+  const zL=el("rect",{x:sx(A),y:Yl-60,width:sx(lo)-sx(A),height:100,fill:C.orange,"fill-opacity":0.14},zone);
+  const zM=el("rect",{x:sx(lo),y:Yl-60,width:sx(hi)-sx(lo),height:100,fill:C.soft,"fill-opacity":0.18},zone);
+  const zR=el("rect",{x:sx(hi),y:Yl-60,width:sx(Bn)-sx(hi),height:100,fill:C.orange,"fill-opacity":0.14},zone);
+  txt(sx(lo)-10,Yl-84,"",{},zone);
+  const zLab=txt((sx(lo)+sx(hi))/2,Yl-76,"plausible: 38.7% to 46.3%",{"text-anchor":"middle","font-size":22,"font-weight":700,fill:C.blue},zone);
+  // axis
+  el("line",{x1:X0,y1:Yl,x2:X1,y2:Yl,stroke:C.grey,"stroke-width":2});
+  for(let v=0.34;v<=0.5201;v+=0.02){el("line",{x1:sx(v),y1:Yl-8,x2:sx(v),y2:Yl+8,stroke:C.grey,"stroke-width":2});txt(sx(v),Yl+36,Math.round(v*100)+"%",{"text-anchor":"middle","font-size":18,fill:C.grey});}
+  txt((X0+X1)/2,Yl+150,"μ₀: the value H₀ says Knueppel's true rate is",{"text-anchor":"middle","font-size":21});
+  // the estimate
+  el("circle",{cx:sx(Y),cy:Yl,r:9,fill:C.blue});
+  txt(sx(Y),Yl+92,"our estimate: 42.5%",{"text-anchor":"middle","font-size":19,fill:C.blue});
+  el("line",{x1:sx(Y),y1:Yl+12,x2:sx(Y),y2:Yl+72,stroke:C.blue,"stroke-width":1.5,"stroke-dasharray":"4 4"});
+  // trail of tested values and the current one
+  const trailBox=el("g",{});let trail=el("g",{},trailBox);
+  const mk=el("path",{fill:C.orange});
+  const mkLab=txt(0,Yl-110,"",{"text-anchor":"middle","font-size":20,"font-weight":700});
+  const rT=txt(1460,200,"",{"text-anchor":"end","font-size":30,"font-weight":700,fill:C.dark});
+  const rF=txt(1460,240,"",{"text-anchor":"end","font-size":20,fill:C.ink});
+  const rV=txt(1460,290,"",{"text-anchor":"end","font-size":26,"font-weight":700});
+  makeCaption();
+  setInfo({study:"Kon Knueppel made 273 of his 642 three-point attempts as a rookie in 2025-26: 42.5%, with a standard error of 0.0195. His true shooting rate μ is unknown. For any value μ₀ we can run Monday's test of H₀: μ = μ₀.",
+    todo:"Drag <b>μ₀</b> and watch t and the verdict. Click <b>Sweep</b> to test many values in a row, then <b>Show the interval</b>.",
+    look:"Values close to 42.5% are kept (blue); values far away are rejected (orange). The kept values form the 95% confidence interval: 42.5% ± 1.96 × 0.0195."});
+  // m0 is the target value; mD is the value on screen, which glides toward m0
+  let m0=0.40, mD=0.40, sweep=false, nextTick=0;
+  function mark(v){const t=(Y-v)/SE, keep=Math.abs(t)<=1.96;
+    el("line",{x1:sx(v),y1:Yl-30,x2:sx(v),y2:Yl+30,stroke:keep?C.soft:C.orange,"stroke-width":3,opacity:0.8,class:"pop"},trail);}
+  function clearTrail(){retire(trail);trail=el("g",{},trailBox);}
+  function refresh(){const m0=mD, t=(Y-m0)/SE, keep=Math.abs(t)<=1.96, x=sx(m0);
+    mk.setAttribute("d",`M${x-10},${Yl-58} L${x+10},${Yl-58} L${x},${Yl-40} Z`);mk.setAttribute("fill",keep?C.soft:C.orange);
+    mkLab.setAttribute("x",x);mkLab.textContent="μ₀ = "+(100*m0).toFixed(1)+"%";mkLab.setAttribute("fill",keep?C.blue:C.orange);
+    rT.textContent="t = "+t.toFixed(2);rF.textContent="t = (0.425 − "+m0.toFixed(3)+") / 0.0195";
+    rV.textContent=keep?"keep: plausible":"reject";rV.setAttribute("fill",keep?C.blue:C.orange);
+    caption(keep?"|t| ≤ 1.96: a test would not reject "+(100*m0).toFixed(1)+"%. It is plausible.":"|t| > 1.96: a test rejects "+(100*m0).toFixed(1)+"%.",keep?C.blue:C.orange);
+    explain("Testing H₀: μ = <b>"+(100*m0).toFixed(1)+"%</b>. t = (0.425 − "+m0.toFixed(3)+") / 0.0195 = <b>"+t.toFixed(2)+"</b>. "+(keep?"That is inside ±1.96, so we <b>keep</b> it: a true rate of "+(100*m0).toFixed(1)+"% could easily produce 42.5% by luck.":"That is past ±1.96, so we <b>reject</b> it: 42.5% would be too surprising if the true rate were "+(100*m0).toFixed(1)+"%.")+
+      "<br><br>The edges of the kept zone are where t = ±1.96: 42.5% ± 1.96 × 1.95 points, so <b>38.7% to 46.3%</b>. That is the 95% confidence interval.");}
+  const sl=slider("μ₀",0.34,0.52,0.40,0.001,v=>{m0=v;sweep=false;});
+  button("Sweep",()=>{clearTrail();m0=mD=nextTick=0.34;sweep=true;});
+  button("Show the interval",b=>{const on=zone.style.opacity!=="1";zone.style.opacity=on?1:0;zone.style.pointerEvents=on?"auto":"none";b.classList.toggle("on",on);});
+  button("Clear",()=>{clearTrail();sweep=false;});
+  hoverTip(zM,()=>"<b style='color:#0021A5'>Plausible values</b><br>Every μ₀ in here would <b>not</b> be rejected at 5%. Together they are the 95% confidence interval: 38.7% to 46.3%.");
+  hoverTip(zL,()=>"<b style='color:#FA4616'>Rejected values</b><br>If Knueppel's true rate were this low, a 42.5% season would be too surprising: |t| > 1.96.");
+  hoverTip(zR,()=>"<b style='color:#FA4616'>Rejected values</b><br>If Knueppel's true rate were this high, a 42.5% season would be too surprising: |t| > 1.96.");
+  refresh();
+  S1.frame=function(dt){
+    if(sweep){ // glide steadily across, dropping a tick every 0.4 points
+      m0=Math.min(0.516,m0+0.045*dt);mD=m0;
+      while(nextTick<=m0+1e-9){mark(nextTick);nextTick+=0.004;}
+      sl.value=m0;if(m0>=0.516)sweep=false;
+    }else{ // ease the marker toward the slider value
+      if(Math.abs(m0-mD)<2e-5){if(mD===m0)return;mD=m0;}
+      else mD+=(m0-mD)*ez(dt,0.07);
+    }
+    refresh();};
+};
+
+/* =====================================================================
+   ANIMATION 2: 100 simulated seasons. How many 95% intervals catch the truth?
+   ===================================================================== */
+const S2={};
+S2.build=function(){
+  header("One hundred intervals for the same shooter","Simulation. Curry's true rate is 42.2%. Each simulated season he takes n threes, and we build a 95% interval.",2);
+  const TRUTH=4248/10073, A=0.10, Bn=0.80, X0=140, X1=1120, YT=190, YB=760;
+  const sx=v=>X0+(v-A)/(Bn-A)*(X1-X0);
+  el("line",{x1:X0,y1:YB,x2:X1,y2:YB,stroke:C.grey,"stroke-width":2});
+  for(let v=0.1;v<=0.8001;v+=0.1){el("line",{x1:sx(v),y1:YB-6,x2:sx(v),y2:YB+6,stroke:C.grey,"stroke-width":2});txt(sx(v),YB+30,Math.round(v*100)+"%",{"text-anchor":"middle","font-size":18,fill:C.grey});}
+  txt((X0+X1)/2,YB+64,"each simulated season's interval for Curry's three-point rate",{"text-anchor":"middle","font-size":20});
+  el("line",{x1:sx(TRUTH),y1:YT-16,x2:sx(TRUTH),y2:YB,stroke:C.dark,"stroke-width":3});
+  txt(sx(TRUTH),YT-24,"the truth: 42.2%",{"text-anchor":"middle","font-size":19,"font-weight":700,fill:C.dark});
+  const holder=el("g",{});let lines=el("g",{},holder);
+  const R=1170;
+  txt(R,200,"Tally",{"font-size":24,"font-weight":700,fill:C.dark});
+  const tN=txt(R,245,"",{"font-size":21,fill:C.ink}),tM=txt(R,290,"",{"font-size":28,"font-weight":700,fill:C.orange}),tP=txt(R,330,"",{"font-size":21,fill:C.ink});
+  const tW=txt(R,390,"",{"font-size":20,fill:C.ink}),tL=txt(R,425,"",{"font-size":20,fill:C.ink});
+  makeCaption();
+  setInfo({study:"A simulation. Suppose Curry's true three-point skill is his career rate, 42.2% (4,248 of 10,073): each shot goes in with chance 0.422. Each simulated season he takes n shots; we compute the share made and build an interval: share ± z × SE, with SE = √(p(1−p)/n) and z = 1.645, 1.96 or 2.58.",
+    todo:"Click <b>Simulate 100 seasons</b>. Then <b>Add 100 more</b> a few times. Try other <b>shots per season</b> and other confidence levels.",
+    look:"The orange intervals miss 42.2%. With a 95% interval, about 5 in every 100 miss, whatever n is. A bigger n makes every interval narrower, but the miss rate stays near 5%."});
+  let n=100,z=1.96,lvl=95,N=0,miss=0,queue=0,grow=[];const r=rng(19);
+  const gap=(YB-YT-10)/100;
+  // one new season: the interval appears at the season's estimate and grows out to its ends
+  function draw1(){let k=0;for(let i=0;i<n;i++)if(r()<TRUTH)k++;const p=k/n,se=Math.sqrt(p*(1-p)/n),lo=p-z*se,hi=p+z*se,hit=lo<=TRUTH&&TRUTH<=hi;
+    N++;if(!hit)miss++;
+    const row=(N-1)%100;if(row===0&&N>1){retire(lines);lines=el("g",{},holder);} // screen full: fade it and start again at the top
+    const s={p,lo,hi,hit,id:N,n,lvl},y=YT+row*gap+gap/2,col=hit?C.soft:C.orange,x=sx(p);
+    const g=el("g",{},lines);
+    const ln=el("line",{x1:x,y1:y,x2:x,y2:y,stroke:col,"stroke-width":Math.max(2,gap*0.62),"stroke-linecap":"round",opacity:0},g);
+    el("rect",{x:X0,y:y-gap/2,width:X1-X0,height:gap,fill:"transparent"},g);
+    hoverTip(g,()=>"<b style='color:"+(s.hit?"#4A6FD4":"#FA4616")+"'>Season #"+s.id+(s.hit?": caught the truth":": missed the truth")+"</b><br>Took "+s.n+" shots, made "+(100*s.p).toFixed(0)+"%.<br>"+s.lvl+"% interval: "+(100*s.lo).toFixed(1)+"% to "+(100*s.hi).toFixed(1)+"%.");
+    grow.push({ln,x,a:sx(Math.max(A,lo)),b:sx(Math.min(Bn,hi)),t:0});}
+  function render(){
+    tN.textContent=N?N.toLocaleString()+" seasons so far":"no seasons yet";
+    tM.textContent=N?miss+" missed":"";tP.textContent=N?"("+pct(miss/N)+" of all intervals)":"";
+    tW.textContent=n+" shots per season, "+lvl+"% intervals";
+    tL.textContent="typical width: ±"+(100*z*Math.sqrt(TRUTH*(1-TRUTH)/n)).toFixed(1)+" points";
+    if(!N)caption("Simulate some seasons.");
+    else caption("About "+(100-lvl)+" in every 100 intervals should miss. So far: "+pct(miss/N)+".",C.dark);
+    explain(N?("<b>"+N.toLocaleString()+"</b> seasons so far, each with <b>"+n+"</b> shots and a <b>"+lvl+"%</b> interval. <b>"+miss+"</b> intervals missed the true 42.2%: <b>"+pct(miss/N)+"</b>. A "+lvl+"% method should miss about "+(100-lvl)+"% of the time.<br><br>Each interval is about ±"+(100*z*Math.sqrt(TRUTH*(1-TRUTH)/n)).toFixed(1)+" points wide. From one season you cannot know whether its interval is one of the misses; the 95% is a promise about the method."):"Click <b>Simulate 100 seasons</b>.");}
+  function reset(){N=0;miss=0;queue=0;grow=[];retire(lines);lines=el("g",{},holder);render();}
+  button("Simulate 100 seasons",()=>{reset();queue=100;});
+  button("Add 100 more",()=>{queue+=100;});
+  slider("Shots per season",20,400,100,10,v=>{n=v;reset();});
+  const lv=[button("90%",()=>{z=1.645;lvl=90;reset();}),button("95%",()=>{z=1.96;lvl=95;reset();},true),button("99%",()=>{z=2.576;lvl=99;reset();})];group(lv);
+  render();let acc=0;
+  const RATE=0.025; // seconds between seasons: 100 seasons in 2.5 s
+  S2.frame=function(dt){
+    if(queue>0){acc+=dt;let k=Math.min(queue,Math.floor(acc/RATE));if(k>0){acc-=k*RATE;for(let i=0;i<k;i++)draw1();queue-=k;render();}}
+    else acc=0;
+    if(grow.length)grow=grow.filter(o=>{o.t=Math.min(1,o.t+dt/0.35);const e=1-Math.pow(1-o.t,3);
+      o.ln.setAttribute("x1",o.x+(o.a-o.x)*e);o.ln.setAttribute("x2",o.x+(o.b-o.x)*e);o.ln.setAttribute("opacity",Math.min(1,o.t*3));return o.t<1;});
+  };
+};
+
+/* ===================================================================== */
+const SCENES=[S1,S2];let cur=0,last=performance.now();
+function show(i){tipEl.style.display="none";cur=(i+SCENES.length)%SCENES.length;svg.innerHTML="";ctl.innerHTML="";capEl=null;SCENES[cur].frame=null;SCENES[cur].build();
+  svg.style.animation="none";void svg.getBoundingClientRect();svg.style.animation="fadein .35s ease-out";}
+// fade a group out, then remove it
+function retire(g){g.style.transition="opacity .35s";g.style.opacity=0;g.style.pointerEvents="none";setTimeout(()=>g.remove(),400);}
+function loop(t){const dt=Math.min(0.1,(t-last)/1000);last=t;if(SCENES[cur].frame)SCENES[cur].frame(dt);requestAnimationFrame(loop);}
+document.addEventListener("keydown",e=>{if(e.target.tagName==="INPUT")return;if(e.key==="ArrowRight")show(cur+1);else if(e.key==="ArrowLeft")show(cur-1);else if(e.key==="i"||e.key==="I")toggleInfo();else if(e.key==="f"||e.key==="F"){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}});
+show(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>
